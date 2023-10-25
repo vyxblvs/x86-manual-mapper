@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34009.444
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ManualMapper", "ManualMapper\ManualMapper.vcxproj", "{300FEF1E-E674-40C9-BA20-1E63AB400537}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{300FEF1E-E674-40C9-BA20-1E63AB400537}.Debug|x64.ActiveCfg = Debug|x64
+		{300FEF1E-E674-40C9-BA20-1E63AB400537}.Debug|x64.Build.0 = Debug|x64
+		{300FEF1E-E674-40C9-BA20-1E63AB400537}.Debug|x86.ActiveCfg = Debug|Win32
+		{300FEF1E-E674-40C9-BA20-1E63AB400537}.Debug|x86.Build.0 = Debug|Win32
+		{300FEF1E-E674-40C9-BA20-1E63AB400537}.Release|x64.ActiveCfg = Release|x64
+		{300FEF1E-E674-40C9-BA20-1E63AB400537}.Release|x64.Build.0 = Release|x64
+		{300FEF1E-E674-40C9-BA20-1E63AB400537}.Release|x86.ActiveCfg = Release|Win32
+		{300FEF1E-E674-40C9-BA20-1E63AB400537}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {70860057-9D01-4D3A-B246-6832F818D78B}
+	EndGlobalSection
+EndGlobal
