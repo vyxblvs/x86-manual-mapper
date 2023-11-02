@@ -2,35 +2,17 @@
 #include "helpers.h"
 
 
-bool AllocMemory(_module* target)
-{
-	target->BasePtr = VirtualAllocEx(process, nullptr, target->image->SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	if (!target->BasePtr)
-	{
-		std::cout << "Failed to allocate memory (" << GetLastError() << ")\n";
-		std::cout << "Module: " << target->image->ModuleName << '\n';
-		return false;
-	}
-
-	DWORD OldProtection;
-	return VirtualProtect(target->image->MappedAddress, target->image->SizeOfImage, PAGE_WRITECOPY, &OldProtection);
-}
-
-
 DWORD GetOffset(DWORD rva, LOADED_IMAGE* image)
 {
 	const auto SectionHeader = image->Sections;
+
+	if (rva < SectionHeader[0].VirtualAddress) return rva;
 
 	for (ULONG x = 0; x < image->NumberOfSections; ++x)
 	{
 		if (rva >= SectionHeader[x].VirtualAddress && rva <= (SectionHeader[x].VirtualAddress + SectionHeader[x].Misc.VirtualSize))
 		{
 			return SectionHeader[x].PointerToRawData + (rva - SectionHeader[x].VirtualAddress);
-		}
-		
-		if (x && rva < SectionHeader[x].VirtualAddress)
-		{
-			return SectionHeader[x].PointerToRawData - (SectionHeader[x].VirtualAddress - rva);
 		}
 	}
 

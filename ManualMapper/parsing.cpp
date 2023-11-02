@@ -32,7 +32,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 		else if (_stricmp(target, data.cFileName) == 0)
 		{
-			modules.emplace_back(_module{ ImageLoad(path, nullptr) });
+			modules.emplace_back(_module{ NULL, ImageLoad(path, nullptr) });
 			if (!modules.back().image)
 			{
 				std::cout << "Failed to load resolving image (" << GetLastError() << ")\n";
@@ -55,7 +55,6 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 bool GetDependencies(LOADED_IMAGE* image)
 {
-
 	//Initialize directories to be searched for unloaded modules
 	static std::string directories[2]{ "c:\\Windows\\SysWOW64" };
 	if (directories[1].empty())
@@ -96,35 +95,29 @@ bool GetDependencies(LOADED_IMAGE* image)
 }
 
 
-bool WINAPI SetReloctions(_module* TargetModule)
+void WINAPI SetReloctions(_module* TargetModule)
 {
-	const auto image		  = TargetModule->image;
-	const auto ModuleBase	  = TargetModule->ImageBase;
-	const auto RelocTableData = RelocationDirectory(image);
-	if (!RelocTableData.Size) return true;
+	const auto image   = TargetModule->image;
+	const auto DataDir = RelocationDirectory(image);
+	if (!DataDir.Size || TargetModule->ImageBase == image->FileHeader->OptionalHeader.ImageBase) return;
 
-	auto RelocTable = ConvertRva<BaseRelocation*>(image->MappedAddress, RelocTableData.VirtualAddress, image);
-	auto RelocBlock = reinterpret_cast<WORD*>(RelocTable) + 4; 
+	auto RelocBlock = ConvertRva<IMAGE_BASE_RELOCATION*>(image->MappedAddress, DataDir.VirtualAddress, image);
+	auto FinalEntry = reinterpret_cast<BYTE*>(RelocBlock) + DataDir.Size;
 
-	const auto FinalEntry = reinterpret_cast<BYTE*>(RelocTable) + RelocTableData.Size;
-	while(reinterpret_cast<BYTE*>(RelocTable) < FinalEntry)
+	while (reinterpret_cast<BYTE*>(RelocBlock) < FinalEntry)
 	{
-		for (UINT x = 0; RelocBlock[x] && x < (RelocTable->SizeOfBlock - sizeof(BaseRelocation)) / sizeof(WORD); ++x)
+		const WORD* entry = reinterpret_cast<WORD*>(RelocBlock) + 4;
+
+		for (UINT y = 0; entry[y] != IMAGE_REL_BASED_ABSOLUTE && y < (RelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD); ++y)
 		{
-			const auto RelocPtr  = ConvertRva<DWORD*>(image->MappedAddress, RelocBlock[x] % 0x1000 + RelocTable->VirtualAddress, image);
-			const auto RelocData = *RelocPtr - image->FileHeader->OptionalHeader.ImageBase;
-
-			if (!RelocData) *RelocPtr = ModuleBase;
-			else if (RelocData < image->Sections[0].VirtualAddress) continue;
-			else *RelocPtr = ConvertRva<DWORD>(ModuleBase, RelocData, image);
-
+			DWORD* RelocAddress = ConvertRva<DWORD*>(image->MappedAddress, entry[y] % 0x1000 + RelocBlock->VirtualAddress, image);
+			*RelocAddress = (*RelocAddress - image->FileHeader->OptionalHeader.ImageBase) + TargetModule->ImageBase;
 		}
-		
-		RelocTable = reinterpret_cast<BaseRelocation*>(reinterpret_cast<char*>(RelocTable) + RelocTable->SizeOfBlock);
-		RelocBlock = reinterpret_cast<WORD*>(RelocTable) + 4;
+
+		RelocBlock = reinterpret_cast<IMAGE_BASE_RELOCATION*>(reinterpret_cast<BYTE*>(RelocBlock) + RelocBlock->SizeOfBlock);
 	}
 
-	return true;
+	return;
 }
 
 
@@ -135,7 +128,6 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 	{
 		std::cout << "Failed to locate loaded module for import resolution\n";
 		std::cout << "Module name: " << ModuleName << '\n';
-		std::cout << "Vector size: " << LoadedModules.size() << '\n';
 		return false;
 	}
 
@@ -187,13 +179,13 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 	}
 
 	//Getting basic export data
-	const auto image = ModulePtr->image;
-	const auto ImageBase = image->MappedAddress;
+	const auto image		 = ModulePtr->image;
+	const auto ImageBase	 = image->MappedAddress;
 	const auto ExportDirData = ExportDirectory(image);
-	const auto ExportDir = ConvertRva<IMAGE_EXPORT_DIRECTORY*>(ImageBase, ExportDirData.VirtualAddress, image);
-	const auto ExportTable  = ConvertRva<DWORD*>(ImageBase, ExportDir->AddressOfFunctions,    image);
-	const auto NamePtrTable = ConvertRva<DWORD*>(ImageBase, ExportDir->AddressOfNames,        image);
-	const auto OrdinalTable = ConvertRva<WORD*> (ImageBase, ExportDir->AddressOfNameOrdinals, image);
+	const auto ExportDir     = ConvertRva<IMAGE_EXPORT_DIRECTORY*>(ImageBase, ExportDirData.VirtualAddress, image);
+	const auto ExportTable   = ConvertRva<DWORD*>(ImageBase, ExportDir->AddressOfFunctions,    image);
+	const auto NamePtrTable  = ConvertRva<DWORD*>(ImageBase, ExportDir->AddressOfNames,        image);
+	const auto OrdinalTable  = ConvertRva<WORD*> (ImageBase, ExportDir->AddressOfNameOrdinals, image);
 
 	//Parsing the export directory for a function match
 	for(UINT x = 0; x < ExportDir->NumberOfFunctions; ++x)
@@ -210,7 +202,7 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 				const std::string forwarder = ConvertRva<const char*>(ImageBase, ExportTable[index], image);
 				return GetLoadedExport((forwarder.substr(0, forwarder.find_last_of('.') + 1) + "dll").c_str(), ExportName, buffer);
 			}
-			else *buffer = ConvertRva<DWORD>(ModulePtr->ImageBase, ExportTable[index], image);
+			else *buffer = ModulePtr->ImageBase + ExportTable[index];
 
 			return true;
 		}
@@ -227,7 +219,6 @@ bool WINAPI ResolveImports(_module* target)
 	//Getting basic import data
 	const auto image = target->image;
 	const auto ImageBase = image->MappedAddress;
-	if (!ImportDirectory(image).Size) return true; //Returning if there are no imports (some api sets are just forwarders)
 	const auto ImportDir = ConvertRva<_ImportDescriptor*>(ImageBase, ImportDirectory(image).VirtualAddress, image);
 	
 	//Parsing IDT (final entry is NULL)
@@ -238,7 +229,7 @@ bool WINAPI ResolveImports(_module* target)
 		const auto ModuleName  = ConvertRva<const char*> (ImageBase, ImportDir[x].Name,			   image);
 
 		//Checking if the indexed module is already loaded within the target process
-		bool IsModuleLoaded = (reinterpret_cast<int>(FindLoadedModule(ModuleName)) > 0); 
+		const bool IsModuleLoaded = reinterpret_cast<int>(FindLoadedModule(ModuleName)) > 0; 
 
 		//Going through each function imported from the indexed module (ILT ends with NULL entry)
 		for (UINT y = 0; LookupTable[y].u1.Function != NULL; ++y)
@@ -256,9 +247,5 @@ bool WINAPI ResolveImports(_module* target)
 		}
 	}
 
-
-	if (image != modules[0].image && !ExportDirectory(image).Size)
-		return VirtualFreeEx(process, target->BasePtr, NULL, MEM_RELEASE);
-
-	return WriteProcessMemory(process, target->BasePtr, ImageBase, image->SizeOfImage, nullptr);
+	return true;
 }

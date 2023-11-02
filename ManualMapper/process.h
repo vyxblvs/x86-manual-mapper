@@ -3,13 +3,19 @@
 
 //Forward Declarations
 
-DWORD HijackThread();
+bool HijackThread();
 
-DWORD GetPID();
+bool GetProcessHandle(const char* name);
+
+bool AllocMemory(_module* target);
+
+bool WINAPI MapDll(_module* target);
 
 bool GetLoadedModules();
 
 
 //Macros
 
-#define RunThread(target, buffer) (CreateThread(nullptr, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(target), buffer, NULL, nullptr))
+#define RunThread(target, buffer) CreateThread(nullptr, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(target), buffer, NULL, nullptr)
+
+#define GetEntryPoint(image, base) base + image->FileHeader->OptionalHeader.AddressOfEntryPoint 

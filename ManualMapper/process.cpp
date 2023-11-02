@@ -3,8 +3,13 @@
 #include "helpers.h"
 
 
-DWORD HijackThread()
+bool HijackThread()
 {
+	//Status & constant variables
+	bool status = false;						 // Return value
+ 	constexpr int reserved = NULL;			     // LPVOID lpvReserved
+	constexpr int reason   = DLL_PROCESS_ATTACH; // DWORD fdwReason
+
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, NULL);
 	if (!snapshot)
 	{
@@ -44,39 +49,34 @@ DWORD HijackThread()
 			}
 		} while (Thread32Next(snapshot, &te32));
 	}
-
 	if (thread == nullptr)
 	{
 		std::cout << "Failed to locate valid thread\n";
 		return false;
 	}
 
-	DWORD status = NULL;
+	//Getting thread context (GPR's only)
 	WOW64_CONTEXT context { NULL };
 	context.ContextFlags = WOW64_CONTEXT_CONTROL; //Request general purpose registers
 	if (!Wow64GetThreadContext(thread, &context))
 	{
 		std::cout << "Failed to get thread context (" << GetLastError() << ")\n";
-		CloseHandle(thread);
-		return false;
+		goto exit;
 	}
 
-	constexpr int reserved = NULL;			     //LPVOID lpvReserved
-	constexpr int reason   = DLL_PROCESS_ATTACH; //DWORD fdwReason
-
 	context.Esp -= 4; //LPVOID lpvReserved
-	if (!wpm(process, context.Esp, &reserved, sizeof(int))) goto exit;
+	if (!wpm(context.Esp, &reserved, sizeof(int))) goto exit;
 
 	context.Esp -= 4; //DWORD fdwReason
-	if (!wpm(process, context.Esp, &reason, sizeof(int))) goto exit;
+	if (!wpm(context.Esp, &reason, sizeof(int))) goto exit;
 
 	context.Esp -= 4; //HINSTANCE hinstDLL
-	if (!wpm(process, context.Esp, &modules[0].ImageBase, sizeof(DWORD))) goto exit;
+	if (!wpm(context.Esp, &modules[0].ImageBase, sizeof(DWORD))) goto exit;
 
 	context.Esp -= 4; //Return address
-	if (!wpm(process, context.Esp, &context.Eip, sizeof(DWORD))) goto exit;
+	if (!wpm(context.Esp, &context.Eip, sizeof(DWORD))) goto exit;
 
-	context.Eip = ConvertRva<DWORD>(modules[0].ImageBase, modules[0].image->FileHeader->OptionalHeader.AddressOfEntryPoint, modules[0].image);
+	context.Eip = GetEntryPoint(modules[0].image, modules[0].ImageBase);
 
 	if(!Wow64SetThreadContext(thread, &context))
 	{
@@ -84,16 +84,15 @@ DWORD HijackThread()
 		goto exit;
 	}
 
-    ResumeThread(thread);
 	status = true;
 
 exit:
+	ResumeThread(thread);
 	CloseHandle(thread);
 	return status;
 }
 
 
-//Check which modules are loaded into ac_client.exe to avoid remapping
 bool GetLoadedModules()
 {
 	DWORD size;
@@ -121,8 +120,44 @@ bool GetLoadedModules()
 }
 
 
-//Get ac_client.exe PID
-DWORD GetPID()
+bool AllocMemory(_module* target)
+{
+	const LOADED_IMAGE* image = target->image;
+
+	target->BasePtr = VirtualAllocEx(process, NULL, image->FileHeader->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (!target->BasePtr)
+	{
+		std::cout << "Failed to allocate memory (" << GetLastError() << ")\n";
+		std::cout << "Size: 0x" << HexOut << image->FileHeader->OptionalHeader.SizeOfImage << '\n';
+		return false;
+	}
+
+	DWORD OldProtection;
+	return VirtualProtect(image->MappedAddress, image->SizeOfImage, PAGE_WRITECOPY, &OldProtection);
+}
+
+
+bool WINAPI MapDll(_module* target)
+{
+	const auto image    = target->image;
+	const auto sections = image->Sections;
+
+	//Mapping headers
+	if (!wpm(target->BasePtr, image->MappedAddress, sections[0].PointerToRawData)) return false;
+
+	//Mapping sections
+	for (UINT x = 0; x < image->NumberOfSections; ++x)
+	{
+		const DWORD address = target->ImageBase + sections[x].VirtualAddress;
+		const void* section = image->MappedAddress + sections[x].PointerToRawData;
+		if (!wpm(address, section, sections[x].SizeOfRawData)) return false;
+	}
+
+	return true;
+}
+
+
+bool GetProcessHandle(const char* name)
 {
 	PROCESSENTRY32 pe32;
 	pe32.dwSize = sizeof(PROCESSENTRY32);
@@ -134,20 +169,41 @@ DWORD GetPID()
 		return NULL;
 	}
 
+	wchar_t* wName = new wchar_t[MAX_PATH];
+	mbstowcs(wName, name, MAX_PATH);
+	
 	if (Process32First(snapshot, &pe32))
 	{
-		do
+		do 
 		{
-			if (_wcsicmp(L"ac_client.exe", pe32.szExeFile) == 0)
+			if (_wcsicmp(wName, pe32.szExeFile) == 0)
 			{
-				CloseHandle(snapshot);
-				return pe32.th32ProcessID;
-			}
+				process = OpenProcess(PROCESS_ALL_ACCESS, false, pe32.th32ProcessID);
+				if (!process)
+				{
+					std::cout << "Failed to open process (" << GetLastError() << ")\n";
+					std::cout << "Process ID: " << pe32.th32ProcessID << '\n';
+					goto exit;
+				}
 
+				BOOL is_x86;
+				IsWow64Process(process, &is_x86);
+				if (!is_x86)
+				{
+					std::cout << "Invalid target architecture, process must be running under WOW64\n";
+					std::wcout << L"Located process: " << pe32.szExeFile << L'\n';
+					process = reinterpret_cast<void*>(CloseHandle(process) * 0);
+					goto exit;
+				}
+
+				goto exit;
+			}
 		} while (Process32Next(snapshot, &pe32));
 	}
+	std::cout << "Failed to locate " << name << '\n';
 
-	std::cout << "Failed to locate ac_client.exe\n";
+exit:
+	delete[](wName);
 	CloseHandle(snapshot);
-	return NULL;
+	return process != 0;
 }
