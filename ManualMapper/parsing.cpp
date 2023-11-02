@@ -9,7 +9,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 	const HANDLE search = FindFirstFileExA((dir + "\\*").c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
 	if (!search)
 	{
-		std::cout << "FindFirstFileExA Failed (" << GetLastError() << ")\n";
+		std::cout << "[FindModuleDir] FindFirstFileExA Failed (" << GetLastError() << ")\n";
 		std::cout << "Path: " << dir + "\\*" << '\n';
 		return false;
 	}
@@ -32,10 +32,10 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 		else if (_stricmp(target, data.cFileName) == 0)
 		{
-			modules.emplace_back(_module{ NULL, ImageLoad(path, nullptr) });
+			modules.emplace_back(_module{ ImageLoad(path, nullptr) });
 			if (!modules.back().image)
 			{
-				std::cout << "Failed to load image (" << GetLastError() << ")\n";
+				std::cout << "[FindModuleDir] Failed to load image (" << GetLastError() << ")\n";
 				std::cout << "Path: " << path << '\n';
 				FindClose(search);
 				return false;
@@ -62,7 +62,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 		directories[1].resize(MAX_PATH);
 		if (!GetModuleFileNameExA(process, nullptr, directories[1].data(), MAX_PATH))
 		{
-			std::cout << "Failed to get process directory (" << GetLastError() << ")\n";
+			std::cout << "[GetDependencies] Failed to get process directory (" << GetLastError() << ")\n";
 			return false;
 		}
 
@@ -85,7 +85,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 		{
 			if (!FindModuleDir(ModuleName, directories[y]) && y == 2)
 			{
-				std::cout << "Failed to locate module: " << ModuleName << '\n';
+				std::cout << "[GetDependencies] Failed to locate module: " << ModuleName << '\n';
 				return false;
 			}
 		}
@@ -125,18 +125,18 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 	_LoadedModule* ModulePtr = FindLoadedModule(ModuleName);
 	if (ModulePtr == nullptr)
 	{
-		std::cout << "Failed to locate loaded module for import resolution\n";
+		std::cout << "[GetLoadedExport] Failed to locate loaded module for import resolution\n";
 		std::cout << "Module name: " << ModuleName << '\n';
 		return false;
 	}
 
 	//Loading the module locally so I can call GetProcAddress
-	if (ModulePtr->LocalBase == NULL)
+	if (!ModulePtr->LocalBase)
 	{
 		ModulePtr->LocalHandle = LoadLibraryA(ModulePtr->name.c_str());
-		if (ModulePtr->LocalHandle == NULL)
+		if (!ModulePtr->LocalHandle)
 		{
-			std::cout << "Failed to load module (" << GetLastError() << ")\n";
+			std::cout << "[GetLoadedExport] Failed to load module (" << GetLastError() << ")\n";
 			std::cout << "Path: " << ModulePtr->name << '\n';
 			return false;
 		}
@@ -145,7 +145,7 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 	DWORD ProcAddress = reinterpret_cast<DWORD>(GetProcAddress(ModulePtr->LocalHandle, ExportName));
 	if (ProcAddress == NULL)
 	{
-		std::cout << "Failed to locate function (" << GetLastError() << ")\n";
+		std::cout << "[GetLoadedExport] Failed to locate function (" << GetLastError() << ")\n";
 		std::cout << "Function name: " << ExportName << '\n';
 		std::cout << "Module: " << ModuleName << '\n';
 		return false;
@@ -171,7 +171,7 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 	}
 	if (ModulePtr == nullptr)
 	{
-		std::cout << "Failed to locate module\n";
+		std::cout << "[GetUnloadedExport] Failed to locate module\n";
 		std::cout << "Module name: " << ModuleName << '\n';
 		std::cout << "Vector size: " << modules.size() << '\n';
 		return false;
@@ -207,7 +207,7 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 		}
 	}
 
-	std::cout << "No match found for: " << ImportName << '\n';
+	std::cout << "[GetUnloadedExport] No match found for: " << ImportName << '\n';
 	std::cout << "Module: " << ModuleName << '\n';
 	return false;
 }
@@ -235,7 +235,7 @@ bool WINAPI ResolveImports(_module* target)
 		{
 			const char* ImportName = ConvertRva<IMAGE_IMPORT_BY_NAME*>(ImageBase, LookupTable[y].u1.AddressOfData, image)->Name;
 
-			if (IsModuleLoaded == true)
+			if (IsModuleLoaded)
 			{
 				if (GetLoadedExport(ModuleName, ImportName, &ImportTable[y].u1.AddressOfData) == false) return false;
 			}

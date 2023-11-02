@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
 
     if (!GetProcessHandle(argv[1])) return false;
 
-    modules.emplace_back(_module{ NULL, GetDll(argv[2])});
+    modules.emplace_back(_module{ GetDll(argv[2])});
     if (!modules.back().image) return false;
 
     std::vector<HANDLE> threads;

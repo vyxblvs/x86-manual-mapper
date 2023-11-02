@@ -5,25 +5,25 @@
 
 struct _module
 {
+	LOADED_IMAGE* image;
+
 	union
 	{
 		void* BasePtr;
 		DWORD ImageBase = 0;
 	};
-
-	LOADED_IMAGE* image;
 };
 
 struct _LoadedModule
 {
+	DWORD base = 0;
+	std::string name;
+
 	union
 	{
 		HMODULE LocalHandle;
 		DWORD LocalBase = 0;
 	};
-
-	DWORD base = 0;
-	std::string name;
 };
 
 
@@ -39,9 +39,6 @@ typedef IMAGE_THUNK_DATA32      ThunkData32;
 extern HANDLE process;
 extern std::vector<_module> modules;
 extern std::vector<_LoadedModule> LoadedModules;
-
-
-bool FindModuleDir(const char* target, const std::string dir, _module* buffer);
 
 bool GetDependencies(LOADED_IMAGE* image);
 

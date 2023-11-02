@@ -63,7 +63,7 @@ bool CheckModules(const char* target)
 
 	for (UINT x = 0; x < LoadedModules.size(); ++x)
 	{
-		if (_stricmp(target, PathToImage(LoadedModules[x].name.c_str()).c_str()) == 0)
+		if (_stricmp(target, PathToImage(LoadedModules[x].name).c_str()) == 0)
 			return true;
 	}
 

@@ -61,7 +61,7 @@ LOADED_IMAGE* GetDll(const char* path)
 	LOADED_IMAGE* image = ImageLoad(path, nullptr);
 	if (!image)
 	{
-		std::cout << "Failed to load image (" << GetLastError() << ")\n";
+		std::cout << "[GetDll()] Failed to load image (" << GetLastError() << ")\n";
 		std::cout << "Path: " << path << '\n';
 		return nullptr;
 	}

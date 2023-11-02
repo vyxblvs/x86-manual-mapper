@@ -13,7 +13,7 @@ bool HijackThread()
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, NULL);
 	if (!snapshot)
 	{
-		std::cout << "Failed to take a snapshot of current threads\n";
+		std::cout << "[HijackThread] Failed to take a snapshot of current threads\n";
 		return false;
 	}
 
@@ -32,7 +32,7 @@ bool HijackThread()
 				thread = OpenThread(THREAD_ALL_ACCESS, false, te32.th32ThreadID);
 				if (!thread)
 				{
-					std::cout << "Failed to open thread (" << GetLastError() << ")\n";
+					std::cout << "[HijackThread] Failed to open thread (" << GetLastError() << ")\n";
 					return false;
 				}
 
@@ -51,7 +51,7 @@ bool HijackThread()
 	}
 	if (thread == nullptr)
 	{
-		std::cout << "Failed to locate valid thread\n";
+		std::cout << "[HijackThread] Failed to locate valid thread\n";
 		return false;
 	}
 
@@ -60,7 +60,7 @@ bool HijackThread()
 	context.ContextFlags = WOW64_CONTEXT_CONTROL; //Request general purpose registers
 	if (!Wow64GetThreadContext(thread, &context))
 	{
-		std::cout << "Failed to get thread context (" << GetLastError() << ")\n";
+		std::cout << "[HijackThread] Failed to get thread context (" << GetLastError() << ")\n";
 		goto exit;
 	}
 
@@ -80,7 +80,7 @@ bool HijackThread()
 
 	if(!Wow64SetThreadContext(thread, &context))
 	{
-		std::cout << "Failed to set thread context (" << GetLastError() << ")\n";
+		std::cout << "[HijackThread] Failed to set thread context (" << GetLastError() << ")\n";
 		goto exit;
 	}
 
@@ -100,7 +100,7 @@ bool GetLoadedModules()
 
 	if (!EnumProcessModules(process, handles, sizeof(handles), &size))
 	{
-		std::cout << "Failed to enumerate process modules (" << GetLastError() << ")\n";
+		std::cout << "[GetLoadedModules] Failed to enumerate process modules (" << GetLastError() << ")\n";
 		return false;
 	}
 
@@ -109,11 +109,11 @@ bool GetLoadedModules()
 		char buffer[MAX_PATH];
 		if (!GetModuleFileNameExA(process, handles[x], buffer, MAX_PATH))
 		{
-			std::cout << "Failed to get module path (" << GetLastError() << ")\n";
+			std::cout << "[GetLoadedModules] Failed to get module path (" << GetLastError() << ")\n";
 			return false;
 		}
 
-		LoadedModules.emplace_back(_LoadedModule{ NULL, reinterpret_cast<DWORD>(handles[x]), buffer });
+		LoadedModules.emplace_back(_LoadedModule{ reinterpret_cast<DWORD>(handles[x]), buffer });
 	}
 
 	return true;
@@ -127,7 +127,7 @@ bool AllocMemory(_module* target)
 	target->BasePtr = VirtualAllocEx(process, NULL, image->FileHeader->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if (!target->BasePtr)
 	{
-		std::cout << "Failed to allocate memory (" << GetLastError() << ")\n";
+		std::cout << "[AllocMemory] Failed to allocate memory (" << GetLastError() << ")\n";
 		std::cout << "Size: 0x" << HexOut << image->FileHeader->OptionalHeader.SizeOfImage << '\n';
 		return false;
 	}
@@ -165,7 +165,7 @@ bool GetProcessHandle(const char* name)
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
 	if (!snapshot)
 	{
-		std::cout << "Failed to take a snapshot of processes (" << GetLastError() << ")\n";
+		std::cout << "[GetProcessHandle] Failed to take a snapshot of processes (" << GetLastError() << ")\n";
 		return NULL;
 	}
 
@@ -181,7 +181,7 @@ bool GetProcessHandle(const char* name)
 				process = OpenProcess(PROCESS_ALL_ACCESS, false, pe32.th32ProcessID);
 				if (!process)
 				{
-					std::cout << "Failed to open process (" << GetLastError() << ")\n";
+					std::cout << "[GetProcessHandle] Failed to open process (" << GetLastError() << ")\n";
 					std::cout << "Process ID: " << pe32.th32ProcessID << '\n';
 					goto exit;
 				}
@@ -190,7 +190,7 @@ bool GetProcessHandle(const char* name)
 				IsWow64Process(process, &is_x86);
 				if (!is_x86)
 				{
-					std::cout << "Invalid target architecture, process must be running under WOW64\n";
+					std::cout << "[GetProcessHandle] Invalid target architecture, process must be running under WOW64\n";
 					std::wcout << L"Located process: " << pe32.szExeFile << L'\n';
 					process = reinterpret_cast<void*>(CloseHandle(process) * 0);
 				}
@@ -199,7 +199,7 @@ bool GetProcessHandle(const char* name)
 			}
 		} while (Process32Next(snapshot, &pe32));
 	}
-	std::cout << "Failed to locate " << name << '\n';
+	std::cout << "[GetProcessHandle] Failed to locate " << name << '\n';
 
 exit:
 	delete[](wName);
