@@ -65,13 +65,13 @@ bool HijackThread()
 	}
 
 	context.Esp -= 4; //LPVOID lpvReserved
-	if (!wpm(context.Esp, &reserved, sizeof(int))) goto exit;
+	if (!wpm(context.Esp, &reserved, sizeof(LPVOID))) goto exit;
 
 	context.Esp -= 4; //DWORD fdwReason
-	if (!wpm(context.Esp, &reason, sizeof(int))) goto exit;
+	if (!wpm(context.Esp, &reason, sizeof(DWORD))) goto exit;
 
 	context.Esp -= 4; //HINSTANCE hinstDLL
-	if (!wpm(context.Esp, &modules[0].ImageBase, sizeof(DWORD))) goto exit;
+	if (!wpm(context.Esp, &modules[0].ImageBase, sizeof(HINSTANCE))) goto exit;
 
 	context.Esp -= 4; //Return address
 	if (!wpm(context.Esp, &context.Eip, sizeof(DWORD))) goto exit;
@@ -193,7 +193,6 @@ bool GetProcessHandle(const char* name)
 					std::cout << "Invalid target architecture, process must be running under WOW64\n";
 					std::wcout << L"Located process: " << pe32.szExeFile << L'\n';
 					process = reinterpret_cast<void*>(CloseHandle(process) * 0);
-					goto exit;
 				}
 
 				goto exit;

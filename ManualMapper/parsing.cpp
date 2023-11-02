@@ -9,8 +9,8 @@ bool FindModuleDir(const char* target, const std::string dir)
 	const HANDLE search = FindFirstFileExA((dir + "\\*").c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
 	if (!search)
 	{
-		std::cout << "FindFirstFileExA() Failed (" << GetLastError() << ")\n";
-		std::cout << "Path passed: " << dir + "\\*" << '\n';
+		std::cout << "FindFirstFileExA Failed (" << GetLastError() << ")\n";
+		std::cout << "Path: " << dir + "\\*" << '\n';
 		return false;
 	}
 
@@ -35,8 +35,8 @@ bool FindModuleDir(const char* target, const std::string dir)
 			modules.emplace_back(_module{ NULL, ImageLoad(path, nullptr) });
 			if (!modules.back().image)
 			{
-				std::cout << "Failed to load resolving image (" << GetLastError() << ")\n";
-				std::cout << "Image directory: " << path << '\n';
+				std::cout << "Failed to load image (" << GetLastError() << ")\n";
+				std::cout << "Path: " << path << '\n';
 				FindClose(search);
 				return false;
 			}
@@ -47,7 +47,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 	} while (FindNextFileA(search, &data) && GetLastError() != ERROR_NO_MORE_FILES);
 
-	SetLastError(NULL);
+	SetLastError(0);
 	FindClose(search);
 	return false;
 }
@@ -62,7 +62,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 		directories[1].resize(MAX_PATH);
 		if (!GetModuleFileNameExA(process, nullptr, directories[1].data(), MAX_PATH))
 		{
-			std::cout << "Failed to get directory of ac_client.exe (" << GetLastError() << ")\n";
+			std::cout << "Failed to get process directory (" << GetLastError() << ")\n";
 			return false;
 		}
 
@@ -70,7 +70,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 		directories[1] = directories[1].substr(0, pos);
 	}
 
-	const auto ImportTableData = ImportDirectory(image); 
+	const IMAGE_DATA_DIRECTORY ImportTableData = ImportDirectory(image); 
 	if (!ImportTableData.Size) return true;
 
 	const auto MappedAddress   = image->MappedAddress;
@@ -78,7 +78,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 
 	for (ULONG x = 0; x < (ImportTableData.Size / sizeof(_ImportDescriptor)) - 1; ++x)
 	{
-		auto ModuleName = ConvertRva<const char*>(MappedAddress, ImportDirectory[x].Name, image);
+		const char* ModuleName = ConvertRva<const char*>(MappedAddress, ImportDirectory[x].Name, image);
 		if (CheckModules(ModuleName)) continue;
 
 		for (UINT y = 0; y < 2; ++y)
@@ -95,14 +95,13 @@ bool GetDependencies(LOADED_IMAGE* image)
 }
 
 
-void WINAPI SetReloctions(_module* TargetModule)
+void WINAPI ApplyReloction(_module* TargetModule)
 {
 	const auto image   = TargetModule->image;
 	const auto DataDir = RelocationDirectory(image);
-	if (!DataDir.Size || TargetModule->ImageBase == image->FileHeader->OptionalHeader.ImageBase) return;
 
 	auto RelocBlock = ConvertRva<IMAGE_BASE_RELOCATION*>(image->MappedAddress, DataDir.VirtualAddress, image);
-	auto FinalEntry = reinterpret_cast<BYTE*>(RelocBlock) + DataDir.Size;
+	const auto FinalEntry = reinterpret_cast<BYTE*>(RelocBlock) + DataDir.Size;
 
 	while (reinterpret_cast<BYTE*>(RelocBlock) < FinalEntry)
 	{
@@ -194,7 +193,7 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 		if (_stricmp(ImportName, ExportName) == 0)
 		{
 			//Getting the Export Address Table index for the matched function
-			WORD index = OrdinalTable[x];
+			const WORD index = OrdinalTable[x];
 			
 			//Handling forwarders
 			if ((ExportTable[index] >= ExportDirData.VirtualAddress) && (ExportTable[index] < ExportDirData.VirtualAddress + ExportDirData.Size))

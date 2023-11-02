@@ -9,7 +9,7 @@ inline void GetConfigPath(std::string& buffer)
 }
 
 
-bool SaveConfig(char argv[2][MAX_PATH])
+bool SaveConfig(char* argv[3])
 {
 	std::string path(MAX_PATH, NULL);
 	GetConfigPath(path);
@@ -22,15 +22,15 @@ bool SaveConfig(char argv[2][MAX_PATH])
 		return false;
 	}
 
-	file << argv[0] << '\n'; // default process
-	file << argv[1] << '\n'; // default image
+	file << argv[1] << '\n'; // default process
+	file << argv[2] << '\n'; // default image
 
 	file.close();
 	return true;
 }
 
 
-bool LoadConfig(char buffer[2][MAX_PATH])
+bool LoadConfig(char* buffer[3])
 {
 	std::string path(MAX_PATH, NULL);
 	GetConfigPath(path);
@@ -42,8 +42,8 @@ bool LoadConfig(char buffer[2][MAX_PATH])
 		return false;
 	}
 
-	file.getline(buffer[0], MAX_PATH);
 	file.getline(buffer[1], MAX_PATH);
+	file.getline(buffer[2], MAX_PATH);
 
 	file.close();
 	return true;
@@ -52,9 +52,7 @@ bool LoadConfig(char buffer[2][MAX_PATH])
 
 LOADED_IMAGE* GetDll(const char* path)
 {
-	SetLastError(0);
-	GetFileAttributesA(path);
-	if (GetLastError() == (ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND))
+	if (!GetFileAttributesA(path) && GetLastError() == (ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND))
 	{
 		std::cout << "Invalid file path provided: " << path << '\n';
 		return nullptr;

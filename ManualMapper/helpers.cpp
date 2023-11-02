@@ -6,8 +6,6 @@ DWORD GetOffset(DWORD rva, LOADED_IMAGE* image)
 {
 	const auto SectionHeader = image->Sections;
 
-	if (rva < SectionHeader[0].VirtualAddress) return rva;
-
 	for (ULONG x = 0; x < image->NumberOfSections; ++x)
 	{
 		if (rva >= SectionHeader[x].VirtualAddress && rva <= (SectionHeader[x].VirtualAddress + SectionHeader[x].Misc.VirtualSize))

@@ -11,7 +11,7 @@ std::vector<_LoadedModule> LoadedModules;
 
 bool WINAPI DispatchThread(_module* target)
 {
-    SetReloctions(target);
+    if (SHOULD_RELOCATE(target)) ApplyReloction(target);
     return ResolveImports(target);
 }
 
@@ -19,19 +19,17 @@ bool WINAPI DispatchThread(_module* target)
 int main(int argc, char* argv[])
 {
     int status = 0;
-    char arguments[3][MAX_PATH];
-    if (argc >= 3)
+    if (argc < 3)
     {
-        strncpy(arguments[0], argv[1], MAX_PATH);
-        strncpy(arguments[1], argv[2], MAX_PATH);
-        strncpy(arguments[2], argv[3], MAX_PATH);
+        argv[2] = reinterpret_cast<char*>(malloc(MAX_PATH));
+        if (argc == 1) argv[1] = reinterpret_cast<char*>(malloc(MAX_PATH));
     }
 
-    if (!CFG_CHECK(argc, arguments)) return false;
+    if (!CFG_CHECK(argc, argv)) return false;
 
-    if (!GetProcessHandle(arguments[0])) return false;
+    if (!GetProcessHandle(argv[1])) return false;
 
-    modules.emplace_back(_module{ NULL, GetDll(arguments[1])});
+    modules.emplace_back(_module{ NULL, GetDll(argv[2])});
     if (!modules.back().image) return false;
 
     std::vector<HANDLE> threads;
@@ -49,7 +47,7 @@ int main(int argc, char* argv[])
 
     for (UINT x = 0; x < modules.size(); ++x)
     {
-        if (!SHOULD_RELOCATE(modules[x].ImageBase, modules[x].image)) continue;
+        if (IS_API_SET(modules[x].image)) continue;
         threads.emplace_back(RunThread(DispatchThread, &modules[x]));
     }
     if (!WaitForThreads(&threads)) goto exit;

@@ -45,7 +45,7 @@ bool FindModuleDir(const char* target, const std::string dir, _module* buffer);
 
 bool GetDependencies(LOADED_IMAGE* image);
 
-void WINAPI SetReloctions(_module* TargetModule);
+void WINAPI ApplyReloction(_module* TargetModule);
 
 bool WINAPI ResolveImports(_module* target);
 
@@ -60,4 +60,4 @@ bool WINAPI ResolveImports(_module* target);
 
 #define IS_API_SET(image) ImportDirectory(image).Size == NULL
 
-#define SHOULD_RELOCATE(base, image) (!IS_API_SET(image) && (base != image->FileHeader->OptionalHeader.ImageBase))
+#define SHOULD_RELOCATE(ModulePtr) ModulePtr->ImageBase != ModulePtr->image->FileHeader->OptionalHeader.ImageBase && RelocationDirectory(ModulePtr->image).Size != 0
