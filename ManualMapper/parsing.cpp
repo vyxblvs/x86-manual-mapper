@@ -9,7 +9,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 	const HANDLE search = FindFirstFileExA((dir + "\\*").c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
 	if (!search)
 	{
-		std::cout << "[FindModuleDir] FindFirstFileExA Failed (" << GetLastError() << ")\n";
+		std::cout << "FindFirstFileExA Failed (" << GetLastError() << ")\n";
 		std::cout << "Path: " << dir + "\\*" << '\n';
 		return false;
 	}
@@ -125,8 +125,7 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 	_LoadedModule* ModulePtr = FindLoadedModule(ModuleName);
 	if (ModulePtr == nullptr)
 	{
-		std::cout << "[GetLoadedExport] Failed to locate loaded module for import resolution\n";
-		std::cout << "Module name: " << ModuleName << '\n';
+		std::cout << "[GetLoadedExport] Failed to locate loaded module: " << ModuleName << '\n';
 		return false;
 	}
 
@@ -169,10 +168,9 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 			break;
 		}
 	}
-	if (ModulePtr == nullptr)
+	if (!ModulePtr)
 	{
-		std::cout << "[GetUnloadedExport] Failed to locate module\n";
-		std::cout << "Module name: " << ModuleName << '\n';
+		std::cout << "[GetUnloadedExport] Failed to locate module: " << ModuleName << '\n';
 		std::cout << "Vector size: " << modules.size() << '\n';
 		return false;
 	}
@@ -207,7 +205,7 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 		}
 	}
 
-	std::cout << "[GetUnloadedExport] No match found for: " << ImportName << '\n';
+	std::cout << "[GetUnloadedExport] No export found for: " << ImportName << '\n';
 	std::cout << "Module: " << ModuleName << '\n';
 	return false;
 }

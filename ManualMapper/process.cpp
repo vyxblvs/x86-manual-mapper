@@ -165,8 +165,8 @@ bool GetProcessHandle(const char* name)
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
 	if (!snapshot)
 	{
-		std::cout << "[GetProcessHandle] Failed to take a snapshot of processes (" << GetLastError() << ")\n";
-		return NULL;
+		std::cout << "Failed to take a snapshot of processes (" << GetLastError() << ")\n";
+		return false;
 	}
 
 	wchar_t* wName = new wchar_t[MAX_PATH];
@@ -181,8 +181,8 @@ bool GetProcessHandle(const char* name)
 				process = OpenProcess(PROCESS_ALL_ACCESS, false, pe32.th32ProcessID);
 				if (!process)
 				{
-					std::cout << "[GetProcessHandle] Failed to open process (" << GetLastError() << ")\n";
-					std::cout << "Process ID: " << pe32.th32ProcessID << '\n';
+					std::cout << "Failed to open process (" << GetLastError() << ")\n";
+					std::cout << "PID: " << pe32.th32ProcessID << '\n';
 					goto exit;
 				}
 
@@ -190,7 +190,7 @@ bool GetProcessHandle(const char* name)
 				IsWow64Process(process, &is_x86);
 				if (!is_x86)
 				{
-					std::cout << "[GetProcessHandle] Invalid target architecture, process must be running under WOW64\n";
+					std::cout << "Invalid target architecture, process must be running under WOW64\n";
 					std::wcout << L"Located process: " << pe32.szExeFile << L'\n';
 					process = reinterpret_cast<void*>(CloseHandle(process) * 0);
 				}
@@ -199,7 +199,7 @@ bool GetProcessHandle(const char* name)
 			}
 		} while (Process32Next(snapshot, &pe32));
 	}
-	std::cout << "[GetProcessHandle] Failed to locate " << name << '\n';
+	std::cout << "Failed to locate process: " << name << '\n';
 
 exit:
 	delete[](wName);
