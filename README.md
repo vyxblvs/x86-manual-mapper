@@ -1,5 +1,5 @@
 # x86-manual-mapper
-A simple x86 manual map injector for windows 10, my first real project in c++.
+An x86 manual map injector for windows 10, my first real project in c++.
 If you have any suggestions on how i could improve it or any questions about it, let me know at https://t.me/ride_thru
 
 Downsides
