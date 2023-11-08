@@ -32,13 +32,6 @@ struct _LoadedModule
 };
 
 
-//Typedefs
-
-typedef IMAGE_IMPORT_DESCRIPTOR _ImportDescriptor;
-typedef IMAGE_BASE_RELOCATION   BaseRelocation;
-typedef IMAGE_THUNK_DATA32      ThunkData32;
-
-
 //Forward Declarations
 
 extern HANDLE process;

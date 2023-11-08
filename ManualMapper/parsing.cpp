@@ -16,8 +16,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 	do
 	{
-		char path[MAX_PATH];
-		PathCombineA(path, dir.c_str(), data.cFileName);
+		std::string path = dir + "\\" + data.cFileName;
 		
 		if (CheckAttribs(data)) continue;
 
@@ -32,7 +31,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 		else if (_stricmp(target, data.cFileName) == 0)
 		{
-			modules.emplace_back(_module{ ImageLoad(path, nullptr) });
+			modules.emplace_back(_module{ ImageLoad(path.c_str(), nullptr)});
 			if (!modules.back().image)
 			{
 				std::cout << "[FindModuleDir] Failed to load image (" << GetLastError() << ")\n";
@@ -74,9 +73,9 @@ bool GetDependencies(LOADED_IMAGE* image)
 	if (!ImportTableData.Size) return true;
 
 	const auto MappedAddress   = image->MappedAddress;
-	const auto ImportDirectory = ConvertRva<_ImportDescriptor*>(MappedAddress, ImportTableData.VirtualAddress, image);
+	const auto ImportDirectory = ConvertRva<IMAGE_IMPORT_DESCRIPTOR*>(MappedAddress, ImportTableData.VirtualAddress, image);
 
-	for (ULONG x = 0; x < (ImportTableData.Size / sizeof(_ImportDescriptor)) - 1; ++x)
+	for (ULONG x = 0; x < (ImportTableData.Size / sizeof(IMAGE_IMPORT_DESCRIPTOR)) - 1; ++x)
 	{
 		const char* ModuleName = ConvertRva<const char*>(MappedAddress, ImportDirectory[x].Name, image);
 		if (CheckModules(ModuleName)) continue;
@@ -216,13 +215,13 @@ bool WINAPI ResolveImports(_module* target)
 	//Getting basic import data
 	const auto image = target->image;
 	const auto ImageBase = image->MappedAddress;
-	const auto ImportDir = ConvertRva<_ImportDescriptor*>(ImageBase, ImportDirectory(image).VirtualAddress, image);
+	const auto ImportDir = ConvertRva<IMAGE_IMPORT_DESCRIPTOR*>(ImageBase, ImportDirectory(image).VirtualAddress, image);
 	
 	//Parsing IDT (final entry is NULL)
 	for (UINT x = 0; ImportDir[x].Name != NULL; ++x)
 	{
-		const auto ImportTable = ConvertRva<ThunkData32*>(ImageBase, ImportDir[x].FirstThunk,	   image);
-		const auto LookupTable = ConvertRva<ThunkData32*>(ImageBase, ImportDir[x].Characteristics, image);
+		const auto ImportTable = ConvertRva<IMAGE_THUNK_DATA32*>(ImageBase, ImportDir[x].FirstThunk,	   image);
+		const auto LookupTable = ConvertRva<IMAGE_THUNK_DATA32*>(ImageBase, ImportDir[x].Characteristics, image);
 		const auto ModuleName  = ConvertRva<const char*> (ImageBase, ImportDir[x].Name,			   image);
 
 		//Checking if the indexed module is already loaded within the target process
