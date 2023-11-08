@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "config.h"
+#include "helpers.h"
 
 
 inline void GetConfigPath(std::string& buffer)

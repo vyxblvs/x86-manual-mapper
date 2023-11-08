@@ -11,8 +11,6 @@ _LoadedModule* FindLoadedModule(const char* name);
 
 DWORD GetOffset(DWORD rva, LOADED_IMAGE* image);
 
-BOOL WINAPI WriteProcessMemoryEx(HANDLE process, LPVOID address, LPCVOID buffer, SIZE_T size);
-
 std::string PathToImage(std::string path);
 
 
@@ -27,4 +25,6 @@ template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType bas
 
 #define IsDirectory(data) (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && strcmp(data.cFileName, ".") && strcmp(data.cFileName, ".."))
 
-#define wpm(address, buffer, size) WriteProcessMemoryEx(process, reinterpret_cast<LPVOID>(address), buffer, size)
+#define wpm(address, buffer, size) WriteProcessMemory(process, reinterpret_cast<LPVOID>(address), buffer, size, nullptr)
+
+#define HexOut std::uppercase << std::hex

@@ -16,9 +16,14 @@ struct _module
 
 struct _LoadedModule
 {
-	DWORD base = 0;
-	std::string name;
+	union
+	{
+		HMODULE handle;
+		DWORD base = 0;
+	};
 
+	char* name;
+	
 	union
 	{
 		HMODULE LocalHandle;

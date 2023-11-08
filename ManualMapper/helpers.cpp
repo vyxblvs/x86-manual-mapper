@@ -21,19 +21,6 @@ DWORD GetOffset(DWORD rva, LOADED_IMAGE* image)
 }
 
 
-BOOL WINAPI WriteProcessMemoryEx(HANDLE process, LPVOID address, LPCVOID buffer, SIZE_T size)
-{
-	if (!WriteProcessMemory(process, address, buffer, size, nullptr))
-	{
-		std::cout << "WPM Failed (" << GetLastError() << ")\n";
-		std::cout << "Address: 0x" << HexOut << address << '\n';
-		return false;
-	}
-	
-	return true;
-}
-
-
 std::string PathToImage(std::string path)
 {
 	UINT pos = path.find_last_of('\\') + 1;
@@ -63,7 +50,7 @@ bool CheckModules(const char* target)
 
 	for (UINT x = 0; x < LoadedModules.size(); ++x)
 	{
-		if (_stricmp(target, PathToImage(LoadedModules[x].name).c_str()) == 0)
+		if (_stricmp(target, PathToImage(LoadedModules[x].name).c_str()) == 0) 
 			return true;
 	}
 

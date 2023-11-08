@@ -132,7 +132,7 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 	//Loading the module locally so I can call GetProcAddress
 	if (!ModulePtr->LocalBase)
 	{
-		ModulePtr->LocalHandle = LoadLibraryA(ModulePtr->name.c_str());
+		ModulePtr->LocalHandle = LoadLibraryA(ModulePtr->name);
 		if (!ModulePtr->LocalHandle)
 		{
 			std::cout << "[GetLoadedExport] Failed to load module (" << GetLastError() << ")\n";
@@ -205,7 +205,7 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 		}
 	}
 
-	std::cout << "[GetUnloadedExport] No export found for: " << ImportName << '\n';
+	std::cout << "No export found for: " << ImportName << '\n';
 	std::cout << "Module: " << ModuleName << '\n';
 	return false;
 }
