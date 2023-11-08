@@ -58,29 +58,35 @@ bool CheckModules(const char* target)
 }
 
 
-bool WaitForThreads(std::vector<HANDLE>* buffer)
+bool WaitForThreads(std::vector<HANDLE>& buffer)
 {
-	for (UINT x = 0; x < buffer->size(); ++x)
+#pragma warning(disable:6258)
+
+	for (UINT x = 0; x < buffer.size(); ++x)
 	{
-		WaitForSingleObject(buffer->at(x), INFINITE);
+		WaitForSingleObject(buffer[x], INFINITE);
 
 		DWORD status;
-		GetExitCodeThread(buffer->at(x), &status);
+		GetExitCodeThread(buffer[x], &status);
 
 		if (!status)
 		{
-			for (UINT y = 0; y < buffer->size(); ++y)
+			for (UINT y = 0; y < buffer.size(); ++y)
 			{
-				TerminateThread(buffer->at(y), 0);
-				CloseHandle(buffer->at(y));
+				TerminateThread(buffer[y], 0);
+				CloseHandle(buffer[y]);
 			}
+
+			buffer.clear();
 			return false;
 		}
 
-		CloseHandle(buffer->at(x));
+		CloseHandle(buffer[x]);
 	}
 
-	buffer->clear();
+	buffer.clear();
 
 	return true;
+
+#pragma warning(default:6258)
 }

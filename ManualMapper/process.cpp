@@ -5,10 +5,12 @@
 
 bool HijackThread()
 {
+#pragma warning(disable:6001)
+
 	//Status & constant variables
-	bool status = false;						 // Return value
- 	constexpr int reserved = NULL;			     // LPVOID lpvReserved
-	constexpr int reason   = DLL_PROCESS_ATTACH; // DWORD fdwReason
+	bool status = false;
+	constexpr int reserved = NULL;
+	constexpr int reason   = DLL_PROCESS_ATTACH;
 
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, NULL);
 	if (!snapshot)
@@ -49,7 +51,7 @@ bool HijackThread()
 			}
 		} while (Thread32Next(snapshot, &te32));
 	}
-	if (thread == nullptr)
+	if (thread == nullptr) //First reason for 6001 suppression
 	{
 		std::cout << "Failed to locate valid thread\n";
 		return false;
@@ -58,7 +60,7 @@ bool HijackThread()
 	//Getting thread context (GPR's only)
 	WOW64_CONTEXT context { NULL };
 	context.ContextFlags = WOW64_CONTEXT_CONTROL;
-	if (!Wow64GetThreadContext(thread, &context))
+	if (!Wow64GetThreadContext(thread, &context)) //second reason for 6001 suppression
 	{
 		std::cout << "Failed to get thread context (" << GetLastError() << ")\n";
 		goto exit;
@@ -110,6 +112,8 @@ exit:
 	ResumeThread(thread);
 	CloseHandle(thread);
 	return status;
+
+#pragma warning(default:6001)
 }
 
 
@@ -134,7 +138,7 @@ bool GetLoadedModules()
 		const UINT length = GetModuleFileNameExA(process, handles[x], path, MAX_PATH);
 		if (!length)
 		{
-			std::cout << "[GetLoadedModules] Failed to get module path (" << GetLastError() << ")\n";
+			std::cout << "Failed to get module path (" << GetLastError() << ")\n";
 			return false;
 		}
 

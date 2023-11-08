@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
         if (IS_API_SET(modules[x].image)) continue;
         threads.emplace_back(RunThread(DispatchThread, &modules[x]));
     }
-    if (!WaitForThreads(&threads)) goto exit;
+    if (!WaitForThreads(threads)) goto exit;
 
     for (UINT x = 0; x < modules.size(); ++x)
     {

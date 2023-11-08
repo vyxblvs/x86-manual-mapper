@@ -3,7 +3,7 @@
 
 //Forward Declarations
 
-bool WaitForThreads(std::vector<HANDLE>* buffer);
+bool WaitForThreads(std::vector<HANDLE>& buffer);
 
 bool CheckModules(const char* target);
 
