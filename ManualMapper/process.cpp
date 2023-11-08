@@ -170,14 +170,25 @@ bool WINAPI MapDll(_module* target)
 	const auto sections = image->Sections;
 
 	//Mapping headers
-	if (!wpm(target->BasePtr, image->MappedAddress, sections[0].PointerToRawData)) return false;
+	if (!wpm(target->BasePtr, image->MappedAddress, sections[0].PointerToRawData))
+	{
+		std::cout << "Failed to map PE headers into memory (" << GetLastError() << ")\n";
+		std::cout << "Image: " << image->ModuleName << '\n';
+		return false;
+	}
 
 	//Mapping sections
 	for (UINT x = 0; x < image->NumberOfSections; ++x)
 	{
 		const DWORD address = target->ImageBase + sections[x].VirtualAddress;
 		const void* section = image->MappedAddress + sections[x].PointerToRawData;
-		if (!wpm(address, section, sections[x].SizeOfRawData)) return false;
+		if (!wpm(address, section, sections[x].SizeOfRawData))
+		{
+			std::cout << "Failed to map section into memory (" << GetLastError() << ")\n";
+			std::cout << "Section: " << sections[x].Name << '\n';
+			std::cout << "Image: " << image->ModuleName << '\n';
+			return false;
+		}
 	}
 
 	return true;
