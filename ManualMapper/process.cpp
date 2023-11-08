@@ -177,10 +177,13 @@ bool WINAPI MapDll(_module* target)
 		return false;
 	}
 
+	DWORD old;
+	VirtualProtectEx(process, target->BasePtr, sections[0].PointerToRawData, PAGE_READONLY, &old);
+
 	//Mapping sections
 	for (UINT x = 0; x < image->NumberOfSections; ++x)
 	{
-		const DWORD address = target->ImageBase + sections[x].VirtualAddress;
+		void* address = reinterpret_cast<void*>(target->ImageBase + sections[x].VirtualAddress);
 		const void* section = image->MappedAddress + sections[x].PointerToRawData;
 		if (!wpm(address, section, sections[x].SizeOfRawData))
 		{
@@ -189,6 +192,7 @@ bool WINAPI MapDll(_module* target)
 			std::cout << "Image: " << image->ModuleName << '\n';
 			return false;
 		}
+		else VirtualProtectEx(process, address, sections[x].SizeOfRawData, sections[x].Characteristics / 0x1000000, &old);
 	}
 
 	return true;
