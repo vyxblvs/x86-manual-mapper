@@ -32,7 +32,7 @@ bool HijackThread()
 				thread = OpenThread(THREAD_ALL_ACCESS, false, te32.th32ThreadID);
 				if (!thread)
 				{
-					std::cout << "[HijackThread] Failed to open thread (" << GetLastError() << ")\n";
+					std::cout << "Failed to open thread (" << GetLastError() << ")\n";
 					return false;
 				}
 
@@ -60,7 +60,7 @@ bool HijackThread()
 	context.ContextFlags = WOW64_CONTEXT_CONTROL;
 	if (!Wow64GetThreadContext(thread, &context))
 	{
-		std::cout << "[HijackThread] Failed to get thread context (" << GetLastError() << ")\n";
+		std::cout << "Failed to get thread context (" << GetLastError() << ")\n";
 		goto exit;
 	}
 
@@ -100,7 +100,7 @@ bool HijackThread()
 
 	if(!Wow64SetThreadContext(thread, &context))
 	{
-		std::cout << "[HijackThread] Failed to set thread context (" << GetLastError() << ")\n";
+		std::cout << "Failed to set thread context (" << GetLastError() << ")\n";
 		goto exit;
 	}
 
@@ -113,9 +113,12 @@ exit:
 }
 
 
-
 bool GetLoadedModules()
 {
+#pragma warning(push)
+#pragma warning(disable:6385)
+#pragma warning(disable:6386)
+
 	DWORD size;
 	HMODULE handles[1024];
 
@@ -128,7 +131,7 @@ bool GetLoadedModules()
 	for (UINT x = 0; x < size / sizeof(HMODULE); ++x)
 	{
 		char path[MAX_PATH];
-		const short length = GetModuleFileNameExA(process, handles[x], path, MAX_PATH);
+		const UINT length = GetModuleFileNameExA(process, handles[x], path, MAX_PATH);
 		if (!length)
 		{
 			std::cout << "[GetLoadedModules] Failed to get module path (" << GetLastError() << ")\n";
@@ -143,6 +146,8 @@ bool GetLoadedModules()
 	}
 
 	return true;
+
+#pragma warning(pop)
 }
 
 
