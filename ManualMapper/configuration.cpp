@@ -69,7 +69,7 @@ LOADED_IMAGE* GetDll(const char* path)
 
 	if (!VALID_DLL(image))
 	{
-		std::cout << "Invalid image characteristics: 0x" << HexOut << image->Characteristics << " | 0x" << image->FileHeader->OptionalHeader.DllCharacteristics << '\n';
+		std::cout << "Invalid image characteristics: " << HexOut << image->Characteristics << " | 0x" << image->FileHeader->OptionalHeader.DllCharacteristics << '\n';
 		std::cout << "DLL must be a valid x86 image\n";
 		return nullptr;
 	}

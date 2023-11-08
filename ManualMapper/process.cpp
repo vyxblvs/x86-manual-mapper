@@ -5,8 +5,6 @@
 
 bool HijackThread()
 {
-#pragma warning(disable:6001)
-
 	//Status & constant variables
 	bool status = false;
 	constexpr int reserved = NULL;
@@ -31,36 +29,32 @@ bool HijackThread()
 		{
 			if (te32.th32OwnerProcessID == PID)
 			{
-				thread = OpenThread(THREAD_ALL_ACCESS, false, te32.th32ThreadID);
-				if (!thread)
-				{
-					std::cout << "Failed to open thread (" << GetLastError() << ")\n";
-					return false;
-				}
-
-				//Making sure the suspend count is 0
-				if (Wow64SuspendThread(thread) != 0)
-				{
-					ResumeThread(thread);
-					CloseHandle(thread);
-					continue;
-				}
+				thread = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_SUSPEND_RESUME, false, te32.th32ThreadID);
+				if (!thread) continue;
 
 				CloseHandle(snapshot);
 				break;
 			}
 		} while (Thread32Next(snapshot, &te32));
 	}
-	if (thread == nullptr) //First reason for 6001 suppression
+	if (!thread)
 	{
 		std::cout << "Failed to locate valid thread\n";
+		return false;
+	}
+
+	if (Wow64SuspendThread(thread) == static_cast<DWORD>(-1))
+	{
+		std::cout << "Failed to suspend thread (" << GetLastError() << ")\n";
+		std::cout << "Thread ID: " << te32.th32ThreadID << '\n';
+		CloseHandle(thread);
 		return false;
 	}
 
 	//Getting thread context (GPR's only)
 	WOW64_CONTEXT context { NULL };
 	context.ContextFlags = WOW64_CONTEXT_CONTROL;
-	if (!Wow64GetThreadContext(thread, &context)) //second reason for 6001 suppression
+	if (!Wow64GetThreadContext(thread, &context))
 	{
 		std::cout << "Failed to get thread context (" << GetLastError() << ")\n";
 		goto exit;
@@ -70,7 +64,7 @@ bool HijackThread()
 	if (!wpm(context.Esp, &reserved, sizeof(LPVOID)))
 	{
 		std::cout << "Failed to write lpvReserved to stack (" << GetLastError() << ")\n";
-		std::cout << "Address: 0x" << HexOut << context.Esp << '\n';
+		std::cout << "Address: " << HexOut << context.Esp << '\n';
 		goto exit;
 	}
 
@@ -78,7 +72,7 @@ bool HijackThread()
 	if (!wpm(context.Esp, &reason, sizeof(DWORD)))
 	{
 		std::cout << "Failed to write fdwReason to stack (" << GetLastError() << ")\n";
-		std::cout << "Address: 0x" << HexOut << context.Esp << '\n';
+		std::cout << "Address: " << HexOut << context.Esp << '\n';
 		goto exit;
 	}
 
@@ -86,7 +80,7 @@ bool HijackThread()
 	if (!wpm(context.Esp, &modules[0].ImageBase, sizeof(HINSTANCE)))
 	{
 		std::cout << "Failed to write hinstDLL to stack (" << GetLastError() << ")\n";
-		std::cout << "Address: 0x" << HexOut << context.Esp << '\n';
+		std::cout << "Address: " << HexOut << context.Esp << '\n';
 		goto exit;
 	}
 
@@ -94,7 +88,7 @@ bool HijackThread()
 	if (!wpm(context.Esp, &context.Eip, sizeof(DWORD)))
 	{
 		std::cout << "Failed to write return address to stack (" << GetLastError() << ")\n";
-		std::cout << "Address: 0x" << HexOut << context.Esp << '\n';
+		std::cout << "Address: " << HexOut << context.Esp << '\n';
 		goto exit;
 	}
 
@@ -112,8 +106,6 @@ exit:
 	ResumeThread(thread);
 	CloseHandle(thread);
 	return status;
-
-#pragma warning(default:6001)
 }
 
 
@@ -128,7 +120,7 @@ bool GetLoadedModules()
 
 	if (!EnumProcessModules(process, handles, sizeof(handles), &size))
 	{
-		std::cout << "[GetLoadedModules] Failed to enumerate process modules (" << GetLastError() << ")\n";
+		std::cout << "Failed to enumerate process modules (" << GetLastError() << ")\n";
 		return false;
 	}
 
@@ -138,7 +130,7 @@ bool GetLoadedModules()
 		const UINT length = GetModuleFileNameExA(process, handles[x], path, MAX_PATH);
 		if (!length)
 		{
-			std::cout << "Failed to get module path (" << GetLastError() << ")\n";
+			std::cout << "[GetLoadedModules()] Failed to get module path (" << GetLastError() << ")\n";
 			return false;
 		}
 
@@ -162,8 +154,8 @@ bool AllocMemory(_module* target)
 	target->BasePtr = VirtualAllocEx(process, NULL, image->FileHeader->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if (!target->BasePtr)
 	{
-		std::cout << "[AllocMemory] Failed to allocate memory (" << GetLastError() << ")\n";
-		std::cout << "Size: 0x" << HexOut << image->FileHeader->OptionalHeader.SizeOfImage << '\n';
+		std::cout << "Failed to allocate memory (" << GetLastError() << ")\n";
+		std::cout << "Size: " << HexOut << image->FileHeader->OptionalHeader.SizeOfImage << '\n';
 		return false;
 	}
 
@@ -213,7 +205,7 @@ bool GetProcessHandle(const char* name)
 		{
 			if (_wcsicmp(wName, pe32.szExeFile) == 0)
 			{
-				process = OpenProcess(PROCESS_ALL_ACCESS, false, pe32.th32ProcessID);
+				process = OpenProcess(PROCESS_VM_READ | PROCESS_VM_OPERATION | PROCESS_VM_WRITE, false, pe32.th32ProcessID);
 				if (!process)
 				{
 					std::cout << "Failed to open process (" << GetLastError() << ")\n";
