@@ -9,8 +9,8 @@ bool FindModuleDir(const char* target, const std::string dir)
 	const HANDLE search = FindFirstFileExA((dir + "\\*").c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
 	if (!search)
 	{
-		std::cout << "FindFirstFileExA Failed (" << GetLastError() << ")\n";
-		std::cout << "Path: " << dir + "\\*" << '\n';
+		std::cerr << "FindFirstFileExA Failed (" << GetLastError() << ")\n";
+		std::cerr << "Path: " << dir + "\\*" << '\n';
 		return false;
 	}
 
@@ -34,8 +34,8 @@ bool FindModuleDir(const char* target, const std::string dir)
 			modules.emplace_back(_module{ ImageLoad(path.c_str(), nullptr)});
 			if (!modules.back().image)
 			{
-				std::cout << "[FindModuleDir] Failed to load image (" << GetLastError() << ")\n";
-				std::cout << "Path: " << path << '\n';
+				std::cerr << "[FindModuleDir] Failed to load image (" << GetLastError() << ")\n";
+				std::cerr << "Path: " << path << '\n';
 				FindClose(search);
 				return false;
 			}
@@ -61,7 +61,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 		directories[1].resize(MAX_PATH);
 		if (!GetModuleFileNameExA(process, nullptr, directories[1].data(), MAX_PATH))
 		{
-			std::cout << "[GetDependencies] Failed to get process directory (" << GetLastError() << ")\n";
+			std::cerr << "[GetDependencies] Failed to get process directory (" << GetLastError() << ")\n";
 			return false;
 		}
 
@@ -84,7 +84,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 		{
 			if (!FindModuleDir(ModuleName, directories[y]) && y == 2)
 			{
-				std::cout << "[GetDependencies] Failed to locate module: " << ModuleName << '\n';
+				std::cerr << "[GetDependencies] Failed to locate module: " << ModuleName << '\n';
 				return false;
 			}
 		}
@@ -94,7 +94,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 }
 
 
-void WINAPI ApplyReloction(_module* TargetModule)
+void ApplyReloction(_module* TargetModule)
 {
 	const auto image   = TargetModule->image;
 	const auto DataDir = RelocationDirectory(image);
@@ -124,7 +124,7 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 	_LoadedModule* ModulePtr = FindLoadedModule(ModuleName);
 	if (ModulePtr == nullptr)
 	{
-		std::cout << "[GetLoadedExport] Failed to locate loaded module: " << ModuleName << '\n';
+		std::cerr << "[GetLoadedExport] Failed to locate loaded module: " << ModuleName << '\n';
 		return false;
 	}
 
@@ -134,8 +134,8 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 		ModulePtr->LocalHandle = LoadLibraryA(ModulePtr->name);
 		if (!ModulePtr->LocalHandle)
 		{
-			std::cout << "[GetLoadedExport] Failed to load module (" << GetLastError() << ")\n";
-			std::cout << "Path: " << ModulePtr->name << '\n';
+			std::cerr << "[GetLoadedExport] Failed to load module (" << GetLastError() << ")\n";
+			std::cerr << "Path: " << ModulePtr->name << '\n';
 			return false;
 		}
 	}
@@ -143,9 +143,9 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 	DWORD ProcAddress = reinterpret_cast<DWORD>(GetProcAddress(ModulePtr->LocalHandle, ExportName));
 	if (ProcAddress == NULL)
 	{
-		std::cout << "[GetLoadedExport] Failed to locate function (" << GetLastError() << ")\n";
-		std::cout << "Function name: " << ExportName << '\n';
-		std::cout << "Module: " << ModuleName << '\n';
+		std::cerr << "[GetLoadedExport] Failed to locate function (" << GetLastError() << ")\n";
+		std::cerr << "Function name: " << ExportName << '\n';
+		std::cerr << "Module: " << ModuleName << '\n';
 		return false;
 	}
 
@@ -169,8 +169,8 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 	}
 	if (!ModulePtr)
 	{
-		std::cout << "[GetUnloadedExport] Failed to locate module: " << ModuleName << '\n';
-		std::cout << "Vector size: " << modules.size() << '\n';
+		std::cerr << "[GetUnloadedExport] Failed to locate module: " << ModuleName << '\n';
+		std::cerr << "Vector size: " << modules.size() << '\n';
 		return false;
 	}
 
@@ -204,13 +204,13 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 		}
 	}
 
-	std::cout << "No export found for: " << ImportName << '\n';
-	std::cout << "Module: " << ModuleName << '\n';
+	std::cerr << "No export found for: " << ImportName << '\n';
+	std::cerr << "Module: " << ModuleName << '\n';
 	return false;
 }
 
 
-bool WINAPI ResolveImports(_module* target)
+bool ResolveImports(_module* target)
 {
 	//Getting basic import data
 	const auto image = target->image;

@@ -3,9 +3,9 @@
 
 //Forward Declarations
 
-bool SaveConfig(char* argv[3]);
+bool SaveConfig(char* argv[]);
 
-bool LoadConfig(char* buffer[3]);
+bool LoadConfig(char* buffer[]);
 
 LOADED_IMAGE* GetDll(const char* path);
 

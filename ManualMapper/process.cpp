@@ -13,7 +13,7 @@ bool HijackThread()
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, NULL);
 	if (!snapshot)
 	{
-		std::cout << "Failed to take a snapshot of threads\n";
+		std::cerr << "Failed to take a snapshot of threads\n";
 		return false;
 	}
 
@@ -39,14 +39,14 @@ bool HijackThread()
 	}
 	if (!thread)
 	{
-		std::cout << "Failed to locate valid thread\n";
+		std::cerr << "Failed to locate valid thread\n";
 		return false;
 	}
 
 	if (Wow64SuspendThread(thread) == static_cast<DWORD>(-1))
 	{
-		std::cout << "Failed to suspend thread (" << GetLastError() << ")\n";
-		std::cout << "Thread ID: " << te32.th32ThreadID << '\n';
+		std::cerr << "Failed to suspend thread (" << GetLastError() << ")\n";
+		std::cerr << "Thread ID: " << te32.th32ThreadID << '\n';
 		CloseHandle(thread);
 		return false;
 	}
@@ -56,39 +56,39 @@ bool HijackThread()
 	context.ContextFlags = WOW64_CONTEXT_CONTROL;
 	if (!Wow64GetThreadContext(thread, &context))
 	{
-		std::cout << "Failed to get thread context (" << GetLastError() << ")\n";
+		std::cerr << "Failed to get thread context (" << GetLastError() << ")\n";
 		goto exit;
 	}
 
 	context.Esp -= 4; // LPVOID lpvReserved
 	if (!wpm(context.Esp, &reserved, sizeof(LPVOID)))
 	{
-		std::cout << "Failed to write lpvReserved to stack (" << GetLastError() << ")\n";
-		std::cout << "Address: " << HexOut << context.Esp << '\n';
+		std::cerr << "Failed to write lpvReserved to stack (" << GetLastError() << ")\n";
+		std::cerr << "Address: " << HexOut << context.Esp << '\n';
 		goto exit;
 	}
 
 	context.Esp -= 4; // DWORD fdwReason
 	if (!wpm(context.Esp, &reason, sizeof(DWORD)))
 	{
-		std::cout << "Failed to write fdwReason to stack (" << GetLastError() << ")\n";
-		std::cout << "Address: " << HexOut << context.Esp << '\n';
+		std::cerr << "Failed to write fdwReason to stack (" << GetLastError() << ")\n";
+		std::cerr << "Address: " << HexOut << context.Esp << '\n';
 		goto exit;
 	}
 
 	context.Esp -= 4; // HINSTANCE hinstDLL
 	if (!wpm(context.Esp, &modules[0].ImageBase, sizeof(HINSTANCE)))
 	{
-		std::cout << "Failed to write hinstDLL to stack (" << GetLastError() << ")\n";
-		std::cout << "Address: " << HexOut << context.Esp << '\n';
+		std::cerr << "Failed to write hinstDLL to stack (" << GetLastError() << ")\n";
+		std::cerr << "Address: " << HexOut << context.Esp << '\n';
 		goto exit;
 	}
 
 	context.Esp -= 4; // Return address
 	if (!wpm(context.Esp, &context.Eip, sizeof(DWORD)))
 	{
-		std::cout << "Failed to write return address to stack (" << GetLastError() << ")\n";
-		std::cout << "Address: " << HexOut << context.Esp << '\n';
+		std::cerr << "Failed to write return address to stack (" << GetLastError() << ")\n";
+		std::cerr << "Address: " << HexOut << context.Esp << '\n';
 		goto exit;
 	}
 
@@ -96,7 +96,7 @@ bool HijackThread()
 
 	if(!Wow64SetThreadContext(thread, &context))
 	{
-		std::cout << "Failed to set thread context (" << GetLastError() << ")\n";
+		std::cerr << "Failed to set thread context (" << GetLastError() << ")\n";
 		goto exit;
 	}
 
@@ -120,7 +120,7 @@ bool GetLoadedModules()
 
 	if (!EnumProcessModules(process, handles, sizeof(handles), &size))
 	{
-		std::cout << "Failed to enumerate process modules (" << GetLastError() << ")\n";
+		std::cerr << "Failed to enumerate process modules (" << GetLastError() << ")\n";
 		return false;
 	}
 
@@ -130,7 +130,7 @@ bool GetLoadedModules()
 		const UINT length = GetModuleFileNameExA(process, handles[x], path, MAX_PATH);
 		if (!length)
 		{
-			std::cout << "[GetLoadedModules()] Failed to get module path (" << GetLastError() << ")\n";
+			std::cerr << "[GetLoadedModules()] Failed to get module path (" << GetLastError() << ")\n";
 			return false;
 		}
 
@@ -154,8 +154,8 @@ bool AllocMemory(_module* target)
 	target->BasePtr = VirtualAllocEx(process, NULL, image->FileHeader->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if (!target->BasePtr)
 	{
-		std::cout << "Failed to allocate memory (" << GetLastError() << ")\n";
-		std::cout << "Size: " << HexOut << image->FileHeader->OptionalHeader.SizeOfImage << '\n';
+		std::cerr << "Failed to allocate memory (" << GetLastError() << ")\n";
+		std::cerr << "Size: " << HexOut << image->FileHeader->OptionalHeader.SizeOfImage << '\n';
 		return false;
 	}
 
@@ -164,7 +164,7 @@ bool AllocMemory(_module* target)
 }
 
 
-bool WINAPI MapDll(_module* target)
+bool MapDll(_module* target)
 {
 	const auto image    = target->image;
 	const auto sections = image->Sections;
@@ -172,8 +172,8 @@ bool WINAPI MapDll(_module* target)
 	//Mapping headers
 	if (!wpm(target->BasePtr, image->MappedAddress, sections[0].PointerToRawData))
 	{
-		std::cout << "Failed to map PE headers into memory (" << GetLastError() << ")\n";
-		std::cout << "Image: " << image->ModuleName << '\n';
+		std::cerr << "Failed to map PE headers into memory (" << GetLastError() << ")\n";
+		std::cerr << "Image: " << image->ModuleName << '\n';
 		return false;
 	}
 
@@ -187,9 +187,9 @@ bool WINAPI MapDll(_module* target)
 		const void* section = image->MappedAddress + sections[x].PointerToRawData;
 		if (!wpm(address, section, sections[x].SizeOfRawData))
 		{
-			std::cout << "Failed to map section into memory (" << GetLastError() << ")\n";
-			std::cout << "Section: " << sections[x].Name << '\n';
-			std::cout << "Image: " << image->ModuleName << '\n';
+			std::cerr << "Failed to map section into memory (" << GetLastError() << ")\n";
+			std::cerr << "Section: " << sections[x].Name << '\n';
+			std::cerr << "Image: " << image->ModuleName << '\n';
 			return false;
 		}
 		else VirtualProtectEx(process, address, sections[x].SizeOfRawData, sections[x].Characteristics / 0x1000000, &old);
@@ -204,7 +204,7 @@ bool GetProcessHandle(const char* name)
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
 	if (!snapshot)
 	{
-		std::cout << "Failed to take a snapshot of processes (" << GetLastError() << ")\n";
+		std::cerr << "Failed to take a snapshot of processes (" << GetLastError() << ")\n";
 		return false;
 	}
 
@@ -223,8 +223,8 @@ bool GetProcessHandle(const char* name)
 				process = OpenProcess(PROCESS_VM_READ | PROCESS_VM_OPERATION | PROCESS_VM_WRITE, false, pe32.th32ProcessID);
 				if (!process)
 				{
-					std::cout << "Failed to open process (" << GetLastError() << ")\n";
-					std::cout << "PID: " << pe32.th32ProcessID << '\n';
+					std::cerr << "Failed to open process (" << GetLastError() << ")\n";
+					std::cerr << "PID: " << pe32.th32ProcessID << '\n';
 					goto exit;
 				}
 
@@ -232,8 +232,8 @@ bool GetProcessHandle(const char* name)
 				IsWow64Process(process, &is_x86);
 				if (!is_x86)
 				{
-					std::cout << "Invalid target architecture, process must be running under WOW64\n";
-					std::wcout << L"Located process: " << pe32.szExeFile << L'\n';
+					std::cerr << "Invalid target architecture, process must be running under WOW64\n";
+					std::wcerr << L"Located process: " << pe32.szExeFile << L'\n';
 					process = reinterpret_cast<void*>(CloseHandle(process) * 0);
 				}
 
@@ -241,7 +241,7 @@ bool GetProcessHandle(const char* name)
 			}
 		} while (Process32Next(snapshot, &pe32));
 	}
-	std::cout << "Failed to locate process: " << name << '\n';
+	std::cerr << "Failed to locate process: " << name << '\n';
 
 exit:
 	CloseHandle(snapshot);

@@ -21,8 +21,14 @@ int main(int argc, char* argv[])
     int status = 0;
     if (argc < 3)
     {
-        argv[2] = reinterpret_cast<char*>(malloc(MAX_PATH));
-        if (argc == 1) argv[1] = reinterpret_cast<char*>(malloc(MAX_PATH));
+        status = -1;
+
+        argv[2] = new char[MAX_PATH];
+        if (argc == 1)
+        {
+            argv[1] = new char[MAX_PATH];
+            status = -2;
+        }
     }
 
     if (!CFG_CHECK(argc, argv)) return false;
@@ -31,6 +37,12 @@ int main(int argc, char* argv[])
 
     modules.emplace_back(_module{ GetDll(argv[2])});
     if (!modules.back().image) return false;
+
+    if (status < 0)
+    {
+        delete[] argv[1];
+        if(status == -2) delete[] argv[2];
+    }
 
     std::vector<HANDLE> threads;
 

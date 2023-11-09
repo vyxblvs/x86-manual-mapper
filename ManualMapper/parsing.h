@@ -40,9 +40,9 @@ extern std::vector<_LoadedModule> LoadedModules;
 
 bool GetDependencies(LOADED_IMAGE* image);
 
-void WINAPI ApplyReloction(_module* TargetModule);
+void ApplyReloction(_module* TargetModule);
 
-bool WINAPI ResolveImports(_module* target);
+bool ResolveImports(_module* target);
 
 
 //Macros

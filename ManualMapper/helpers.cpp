@@ -14,9 +14,9 @@ DWORD GetOffset(DWORD rva, LOADED_IMAGE* image)
 		}
 	}
 
-	std::cout << "Failed to find file offset\n";
-	std::cout << "Module: " << image->ModuleName << '\n';
-	std::cout << "RVA: " << HexOut << rva << std::endl;
+	std::cerr << "Failed to find file offset\n";
+	std::cerr << "Module: " << image->ModuleName << '\n';
+	std::cerr << "RVA: " << HexOut << rva << std::endl;
 	return NULL;
 }
 

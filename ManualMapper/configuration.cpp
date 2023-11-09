@@ -10,7 +10,7 @@ inline void GetConfigPath(std::string& buffer)
 }
 
 
-bool SaveConfig(char* argv[3])
+bool SaveConfig(char* argv[])
 {
 	std::string path(MAX_PATH, NULL);
 	GetConfigPath(path);
@@ -18,7 +18,7 @@ bool SaveConfig(char* argv[3])
 	std::ofstream file(path);
 	if (file.fail())
 	{
-		std::cout << "Failed to create/save config file\n";
+		std::cerr << "Failed to create/save config file\n";
 		file.close();
 		return false;
 	}
@@ -31,7 +31,7 @@ bool SaveConfig(char* argv[3])
 }
 
 
-bool LoadConfig(char* buffer[3])
+bool LoadConfig(char* buffer[])
 {
 	std::string path(MAX_PATH, NULL);
 	GetConfigPath(path);
@@ -39,7 +39,7 @@ bool LoadConfig(char* buffer[3])
 	std::ifstream file(path);
 	if (file.fail())
 	{
-		std::cout << "Could not open cfg.txt\n";
+		std::cerr << "Could not open cfg.txt\n";
 		return false;
 	}
 
@@ -53,24 +53,24 @@ bool LoadConfig(char* buffer[3])
 
 LOADED_IMAGE* GetDll(const char* path)
 {
-	if (!GetFileAttributesA(path) && GetLastError() == (ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND))
+	if (!GetFileAttributesA(path) && GetLastError() & (ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND))
 	{
-		std::cout << "Invalid file path provided: " << path << '\n';
+		std::cerr << "Invalid file path provided: " << path << '\n';
 		return nullptr;
 	}
 
 	LOADED_IMAGE* image = ImageLoad(path, nullptr);
 	if (!image)
 	{
-		std::cout << "[GetDll()] Failed to load image (" << GetLastError() << ")\n";
-		std::cout << "Path: " << path << '\n';
+		std::cerr << "[GetDll()] Failed to load image (" << GetLastError() << ")\n";
+		std::cerr << "Path: " << path << '\n';
 		return nullptr;
 	}
 
 	if (!VALID_DLL(image))
 	{
-		std::cout << "Invalid image characteristics: " << HexOut << image->Characteristics << " | 0x" << image->FileHeader->OptionalHeader.DllCharacteristics << '\n';
-		std::cout << "DLL must be a valid x86 image\n";
+		std::cerr << "Invalid image characteristics: " << HexOut << image->Characteristics << " | 0x" << image->FileHeader->OptionalHeader.DllCharacteristics << '\n';
+		std::cerr << "DLL must be a valid x86 image\n";
 		return nullptr;
 	}
 

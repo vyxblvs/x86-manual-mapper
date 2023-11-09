@@ -9,7 +9,7 @@ bool GetProcessHandle(const char* name);
 
 bool AllocMemory(_module* target);
 
-bool WINAPI MapDll(_module* target);
+bool MapDll(_module* target);
 
 bool GetLoadedModules();
 
