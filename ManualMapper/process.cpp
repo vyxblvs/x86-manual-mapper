@@ -135,7 +135,7 @@ bool GetLoadedModules()
 		}
 
 		LoadedModules.emplace_back(_LoadedModule{ handles[x] });
-		LoadedModules.back().name = reinterpret_cast<char*>(malloc(length + 1));
+		LoadedModules.back().name = new char[length + 1];
 
 		path[length] = '\0';
 		memcpy(LoadedModules.back().name, path, length + 1);
