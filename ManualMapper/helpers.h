@@ -14,7 +14,7 @@ bool CheckModules(const char* target);
 
 //Macros
 
-template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType base, DWORD rva, const IMAGE_DATA* image) -> ReturnType
+template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType base, const DWORD rva, const IMAGE_DATA* image) -> ReturnType
 {
 	return reinterpret_cast<ReturnType>(reinterpret_cast<BYTE*>(base) + GetOffset(rva, image));
 }

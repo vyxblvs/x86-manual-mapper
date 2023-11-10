@@ -116,7 +116,7 @@ bool GetDependencies(const IMAGE_DATA* image)
 		const char* ModuleName = ConvertRva<const char*>(MappedAddress, ImportDirectory[x].Name, image);
 		if (CheckModules(ModuleName)) continue;
 
-		for (UINT y = 0; y < 2; ++y)
+		for (UINT y = 0; y < (sizeof(directories) / sizeof(std::string)); ++y)
 		{
 			if (!FindModuleDir(ModuleName, directories[y]) && y == 2)
 			{

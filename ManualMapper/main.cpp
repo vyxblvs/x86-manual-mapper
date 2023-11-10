@@ -93,7 +93,7 @@ int main(const int argc, char* argv[])
                 }
                 LoadedModules.clear();
                 delete[] threads;
-                //modules within LoadedModules aren't free'd cuz it takes WAY more time than its worth
+                threads = nullptr;
 
 #pragma warning(pop)
 
