@@ -2,11 +2,11 @@
 #include "helpers.h"
 
 
-DWORD GetOffset(DWORD rva, LOADED_IMAGE* image)
+DWORD GetOffset(const DWORD rva, const IMAGE_DATA* image)
 {
-	const auto SectionHeader = image->Sections;
+	const IMAGE_SECTION_HEADER* SectionHeader = image->sections;
 
-	for (ULONG x = 0; x < image->NumberOfSections; ++x)
+	for (ULONG x = 0; x < image->NT_HEADERS->FileHeader.NumberOfSections; ++x)
 	{
 		if (rva >= SectionHeader[x].VirtualAddress && rva <= (SectionHeader[x].VirtualAddress + SectionHeader[x].Misc.VirtualSize))
 		{
@@ -15,20 +15,20 @@ DWORD GetOffset(DWORD rva, LOADED_IMAGE* image)
 	}
 
 	std::cerr << "Failed to find file offset\n";
-	std::cerr << "Module: " << image->ModuleName << '\n';
+	std::cerr << "Module: " << image->name << '\n';
 	std::cerr << "RVA: " << HexOut << rva << std::endl;
 	return NULL;
 }
 
 
-std::string PathToImage(std::string path)
+std::string PathToImage(const std::string path)
 {
-	UINT pos = path.find_last_of('\\') + 1;
+	const UINT pos = path.find_last_of('\\') + 1;
 	return path.substr(pos);
 }
 
 
-_LoadedModule* FindLoadedModule(const char* name)
+LOADED_MODULE* FindLoadedModule(const char* name)
 {
 	for (UINT x = 0; x < LoadedModules.size(); ++x)
 	{
@@ -44,7 +44,7 @@ bool CheckModules(const char* target)
 {
 	for (UINT x = 0; x < modules.size(); ++x)
 	{
-		if (_stricmp(target, PathToImage(modules[x].image->ModuleName).c_str()) == 0)
+		if (_stricmp(target, PathToImage(modules[x].image.name).c_str()) == 0)
 			return true;
 	}
 
@@ -55,38 +55,4 @@ bool CheckModules(const char* target)
 	}
 
 	return false;
-}
-
-
-bool WaitForThreads(std::vector<HANDLE>& buffer)
-{
-#pragma warning(disable:6258)
-
-	for (UINT x = 0; x < buffer.size(); ++x)
-	{
-		WaitForSingleObject(buffer[x], INFINITE);
-
-		DWORD status;
-		GetExitCodeThread(buffer[x], &status);
-
-		if (!status)
-		{
-			for (UINT y = 0; y < buffer.size(); ++y)
-			{
-				TerminateThread(buffer[y], 0);
-				CloseHandle(buffer[y]);
-			}
-
-			buffer.clear();
-			return false;
-		}
-
-		CloseHandle(buffer[x]);
-	}
-
-	buffer.clear();
-
-	return true;
-
-#pragma warning(default:6258)
 }

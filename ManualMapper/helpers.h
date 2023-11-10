@@ -3,20 +3,18 @@
 
 //Forward Declarations
 
-bool WaitForThreads(std::vector<HANDLE>& buffer);
+DWORD GetOffset(const DWORD rva, const IMAGE_DATA* image);
+
+std::string PathToImage(const std::string path);
+
+LOADED_MODULE* FindLoadedModule(const char* name);
 
 bool CheckModules(const char* target);
-
-_LoadedModule* FindLoadedModule(const char* name);
-
-DWORD GetOffset(DWORD rva, LOADED_IMAGE* image);
-
-std::string PathToImage(std::string path);
 
 
 //Macros
 
-template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType base, DWORD rva, LOADED_IMAGE* image) -> ReturnType
+template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType base, DWORD rva, const IMAGE_DATA* image) -> ReturnType
 {
 	return reinterpret_cast<ReturnType>(reinterpret_cast<BYTE*>(base) + GetOffset(rva, image));
 }
@@ -28,3 +26,5 @@ template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType bas
 #define wpm(address, buffer, size) WriteProcessMemory(process, reinterpret_cast<LPVOID>(address), buffer, size, nullptr)
 
 #define HexOut "0x" << std::uppercase << std::hex
+
+#define STATUS_FAILURE 0

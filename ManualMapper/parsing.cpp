@@ -3,6 +3,50 @@
 #include "helpers.h"
 
 
+bool GetDll(const char* path, MODULE* buffer)
+{
+	if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES)
+	{
+		std::cerr << "Invalid file path provided: " << path << '\n';
+		return false;
+	}
+
+	std::ifstream file(path, std::ios::binary | std::ios::ate);
+	if (file.fail())
+	{
+		std::cerr << "Failed to open file: " << path << '\n';
+		return false;
+	}
+
+	const UINT size = static_cast<UINT>(file.tellg());
+	char* image_ptr = new char[size];
+
+	file.seekg(0, std::ios::beg);
+	file.read(image_ptr, size);
+	file.close();
+
+	IMAGE_DATA& image = buffer->image;
+
+	image.name = new char[MAX_PATH];
+	memcpy_s(image.name, MAX_PATH, path, MAX_PATH);
+
+	image.MappedAddress = reinterpret_cast<DWORD>(image_ptr);
+	image.NT_HEADERS = reinterpret_cast<IMAGE_NT_HEADERS32*>(image_ptr + *reinterpret_cast<DWORD*>(image_ptr + 0x3C));
+	image.sections = IMAGE_FIRST_SECTION(image.NT_HEADERS);
+
+	if (image.NT_HEADERS->OptionalHeader.Magic != 0x10B)
+	{
+		std::cerr << "Invalid DLL architecture, image must be PE32\n";
+		std::cerr << "Magic number: " << HexOut << image.NT_HEADERS->OptionalHeader.Magic << '\n';
+		std::cerr << "Path: " << path << '\n';
+		delete[] image_ptr;
+		return false;
+	}
+
+	return true;
+}
+
+
 bool FindModuleDir(const char* target, const std::string dir)
 {
 	WIN32_FIND_DATAA data;
@@ -16,7 +60,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 	do
 	{
-		std::string path = dir + "\\" + data.cFileName;
+		const std::string path = dir + "\\" + data.cFileName;
 		
 		if (CheckAttribs(data)) continue;
 
@@ -31,17 +75,9 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 		else if (_stricmp(target, data.cFileName) == 0)
 		{
-			modules.emplace_back(_module{ ImageLoad(path.c_str(), nullptr)});
-			if (!modules.back().image)
-			{
-				std::cerr << "[FindModuleDir] Failed to load image (" << GetLastError() << ")\n";
-				std::cerr << "Path: " << path << '\n';
-				FindClose(search);
-				return false;
-			}
-
 			FindClose(search);
-			return true;
+			modules.emplace_back(MODULE{ NULL });
+			return GetDll(path.c_str(), &modules.back());
 		}
 
 	} while (FindNextFileA(search, &data) && GetLastError() != ERROR_NO_MORE_FILES);
@@ -52,7 +88,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 }
 
 
-bool GetDependencies(LOADED_IMAGE* image)
+bool GetDependencies(const IMAGE_DATA* image)
 {
 	//Initialize directories to be searched for unloaded modules
 	static std::string directories[2]{ "c:\\Windows\\SysWOW64" };
@@ -65,7 +101,7 @@ bool GetDependencies(LOADED_IMAGE* image)
 			return false;
 		}
 
-		UINT pos = directories[1].find_last_of('\\');
+		const UINT pos = directories[1].find_last_of('\\');
 		directories[1] = directories[1].substr(0, pos);
 	}
 
@@ -94,9 +130,9 @@ bool GetDependencies(LOADED_IMAGE* image)
 }
 
 
-void ApplyReloction(_module* TargetModule)
+void ApplyReloction(const MODULE* TargetModule)
 {
-	const auto image   = TargetModule->image;
+	const auto image   = &TargetModule->image;
 	const auto DataDir = RelocationDirectory(image);
 
 	auto RelocBlock = ConvertRva<IMAGE_BASE_RELOCATION*>(image->MappedAddress, DataDir.VirtualAddress, image);
@@ -109,7 +145,7 @@ void ApplyReloction(_module* TargetModule)
 		for (UINT y = 0; entry[y] != IMAGE_REL_BASED_ABSOLUTE && y < (RelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD); ++y)
 		{
 			DWORD* RelocAddress = ConvertRva<DWORD*>(image->MappedAddress, entry[y] % 0x1000 + RelocBlock->VirtualAddress, image);
-			*RelocAddress = (*RelocAddress - image->FileHeader->OptionalHeader.ImageBase) + TargetModule->ImageBase;
+			*RelocAddress = (*RelocAddress - image->NT_HEADERS->OptionalHeader.ImageBase) + TargetModule->ImageBase;
 		}
 
 		RelocBlock = reinterpret_cast<IMAGE_BASE_RELOCATION*>(reinterpret_cast<BYTE*>(RelocBlock) + RelocBlock->SizeOfBlock);
@@ -121,7 +157,7 @@ void ApplyReloction(_module* TargetModule)
 
 bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buffer)
 {
-	_LoadedModule* ModulePtr = FindLoadedModule(ModuleName);
+	LOADED_MODULE* ModulePtr = FindLoadedModule(ModuleName);
 	if (ModulePtr == nullptr)
 	{
 		std::cerr << "[GetLoadedExport] Failed to locate loaded module: " << ModuleName << '\n';
@@ -158,10 +194,10 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* buffer)
 {
 	//Locating the imported module
-	_module* ModulePtr = nullptr;
+	MODULE* ModulePtr = nullptr;
 	for (UINT x = 0; x < modules.size(); ++x)
 	{
-		if (_stricmp(ModuleName, PathToImage(modules[x].image->ModuleName).c_str()) == 0)
+		if (_stricmp(ModuleName, PathToImage(modules[x].image.name).c_str()) == 0)
 		{
 			ModulePtr = &modules[x];
 			break;
@@ -175,7 +211,7 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 	}
 
 	//Getting basic export data
-	const auto image		 = ModulePtr->image;
+	const auto image		 = &ModulePtr->image;
 	const auto ImageBase	 = image->MappedAddress;
 	const auto ExportDirData = ExportDirectory(image);
 	const auto ExportDir     = ConvertRva<IMAGE_EXPORT_DIRECTORY*>(ImageBase, ExportDirData.VirtualAddress, image);
@@ -210,19 +246,19 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 }
 
 
-bool ResolveImports(_module* target)
+bool ResolveImports(const MODULE* target)
 {
 	//Getting basic import data
-	const auto image = target->image;
+	const auto image = &target->image;
 	const auto ImageBase = image->MappedAddress;
 	const auto ImportDir = ConvertRva<IMAGE_IMPORT_DESCRIPTOR*>(ImageBase, ImportDirectory(image).VirtualAddress, image);
 	
 	//Parsing IDT (final entry is NULL)
 	for (UINT x = 0; ImportDir[x].Name != NULL; ++x)
 	{
-		const auto ImportTable = ConvertRva<IMAGE_THUNK_DATA32*>(ImageBase, ImportDir[x].FirstThunk,	   image);
+		const auto ImportTable = ConvertRva<IMAGE_THUNK_DATA32*>(ImageBase, ImportDir[x].FirstThunk,	  image);
 		const auto LookupTable = ConvertRva<IMAGE_THUNK_DATA32*>(ImageBase, ImportDir[x].Characteristics, image);
-		const auto ModuleName  = ConvertRva<const char*> (ImageBase, ImportDir[x].Name,			   image);
+		const auto ModuleName  = ConvertRva<const char*> (ImageBase, ImportDir[x].Name, image);
 
 		//Checking if the indexed module is already loaded within the target process
 		const bool IsModuleLoaded = reinterpret_cast<int>(FindLoadedModule(ModuleName)) > 0; 

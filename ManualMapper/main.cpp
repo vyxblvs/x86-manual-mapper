@@ -5,77 +5,117 @@
 #include "helpers.h"
 
 HANDLE process;
-std::vector<_module> modules;
-std::vector<_LoadedModule> LoadedModules;
+std::vector<MODULE> modules;
+std::vector<LOADED_MODULE> LoadedModules;
 
 
-bool WINAPI DispatchThread(_module* target)
+bool WINAPI DispatchThread(MODULE* target)
 {
     if (SHOULD_RELOCATE(target)) ApplyReloction(target);
     return ResolveImports(target);
 }
 
 
-int main(int argc, char* argv[])
+int main(const int argc, char* argv[])
 {
-    int status = 0;
+    int status = -1;
+
+    //Allocate memory for target data manually if arguments weren't passed
     if (argc < 3)
     {
-        status = -1;
-
         argv[2] = new char[MAX_PATH];
+        if (argc == 1) argv[1] = new char[MAX_PATH];
+    }
+
+    if (!CMD_CHECK(argc, argv)) return false; // Check if "-save" was passed as command line argument, save target data if so
+    if (!CFG_CHECK(argc, argv)) return false; // Load default target info if none were passed as command line argument
+
+    //Load user specified DLL
+    modules.emplace_back(MODULE{ NULL });
+    if (!GetDll(argv[2], &modules.back())) return false;
+
+    status = GetProcessHandle(argv[1]);
+    if (argc < 3)
+    {
+        delete[] argv[1];
+        argv[1] = nullptr;
+
         if (argc == 1)
         {
-            argv[1] = new char[MAX_PATH];
-            status = -2;
+            delete[] argv[2];
+            argv[2] = nullptr;
         }
     }
 
-    if (!CFG_CHECK(argc, argv)) return false;
-
-    if (!GetProcessHandle(argv[1])) return false;
-
-    modules.emplace_back(_module{ GetDll(argv[2])});
-    if (!modules.back().image) return false;
-
-    if (status < 0)
+    if (status != STATUS_FAILURE)
     {
-        delete[] argv[1];
-        if(status == -2) delete[] argv[2];
+        if (GetLoadedModules()) // Populating LoadedModules with every module already present in the target process
+        {
+            //Allocate memory & resolve dependencies
+            for (UINT x = 0; x < modules.size(); ++x)
+            {
+                if (IS_API_SET(modules[x].image)) continue;
+
+                modules[x].BasePtr = VirtualAllocEx(process, nullptr, modules[x].image.NT_HEADERS->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+                if (!modules[x].BasePtr)
+                {
+                    std::cerr << "Failed to allocate memory (" << GetLastError() << ")\n";
+                    std::cerr << "Size: " << HexOut << modules[x].image.NT_HEADERS->OptionalHeader.SizeOfImage << '\n';
+                    status = STATUS_FAILURE;
+                    break;
+                }
+
+                status = GetDependencies(&modules[x].image);
+                if (status == STATUS_FAILURE) break;
+            }
+
+            if (status != STATUS_FAILURE)
+            {
+#pragma warning(push)
+#pragma warning(disable: 6385 6001)
+
+                //Applying relocation & import resolution
+                HANDLE* threads = new HANDLE[modules.size()];
+                for (UINT x = 0; x < modules.size(); ++x)
+                {
+                    if (IS_API_SET(modules[x].image)) continue;
+                    threads[x] = CreateThread(nullptr, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(DispatchThread), &modules[x], NULL, nullptr);
+                }
+                for (UINT x = 0; x < modules.size(); ++x)
+                {
+                    WaitForSingleObject(threads[x], INFINITE);
+                    GetExitCodeThread(threads[x], reinterpret_cast<DWORD*>(&status));
+                    if (status == STATUS_FAILURE) break;
+                }
+                for (UINT x = 0; x < modules.size(); ++x)
+                {
+                    CloseHandle(threads[x]); // cause of both suppressions
+                }
+                delete[] threads;
+
+#pragma warning(pop)
+
+                if (status != STATUS_FAILURE)
+                {
+                    //Mapping modules into memory
+                    for (UINT x = 0; x < modules.size(); ++x)
+                    {
+                        if (IS_API_SET(modules[x].image)) continue;
+                        status = MapDll(&modules[x]);
+                        if (!status) break;
+                    }
+
+                    //Running DllMain via thread hijacking
+                    if (status != STATUS_FAILURE)
+                    {
+                        status = HijackThread();
+                        if(status) std::cout << "Successfully mapped dll!\n";
+                    }
+                }
+            }
+        }
     }
-
-    std::vector<HANDLE> threads;
-
-    if (!GetLoadedModules()) goto exit;
-
-    for (UINT x = 0; x < modules.size(); ++x)
-    {
-        if (IS_API_SET(modules[x].image)) continue;
-
-        if (!AllocMemory(&modules[x])) goto exit;
-
-        if (!GetDependencies(modules[x].image)) goto exit;
-    }
-
-    for (UINT x = 0; x < modules.size(); ++x)
-    {
-        if (IS_API_SET(modules[x].image)) continue;
-        threads.emplace_back(RunThread(DispatchThread, &modules[x]));
-    }
-    if (!WaitForThreads(threads)) goto exit;
-
-    for (UINT x = 0; x < modules.size(); ++x)
-    {
-        if (IS_API_SET(modules[x].image)) continue;
-        if (!MapDll(&modules[x])) goto exit;
-    }
-
-    if (!HijackThread()) goto exit;
-
-    std::cout << "Successfully mapped dll!\n";
-    status = true;
-
-exit:
+    
     CloseHandle(process);
     return status;
 }

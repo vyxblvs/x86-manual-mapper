@@ -43,36 +43,9 @@ bool LoadConfig(char* buffer[])
 		return false;
 	}
 
-	file.getline(buffer[1], MAX_PATH);
-	file.getline(buffer[2], MAX_PATH);
+	file.getline(buffer[1], MAX_PATH); // default process
+	file.getline(buffer[2], MAX_PATH); // default image
 
 	file.close();
 	return true;
-}
-
-
-LOADED_IMAGE* GetDll(const char* path)
-{
-	if (!GetFileAttributesA(path) && GetLastError() & (ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND))
-	{
-		std::cerr << "Invalid file path provided: " << path << '\n';
-		return nullptr;
-	}
-
-	LOADED_IMAGE* image = ImageLoad(path, nullptr);
-	if (!image)
-	{
-		std::cerr << "[GetDll()] Failed to load image (" << GetLastError() << ")\n";
-		std::cerr << "Path: " << path << '\n';
-		return nullptr;
-	}
-
-	if (!VALID_DLL(image))
-	{
-		std::cerr << "Invalid image characteristics: " << HexOut << image->Characteristics << " | 0x" << image->FileHeader->OptionalHeader.DllCharacteristics << '\n';
-		std::cerr << "DLL must be a valid x86 image\n";
-		return nullptr;
-	}
-
-	return image;
 }
