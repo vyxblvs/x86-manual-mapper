@@ -12,7 +12,7 @@ std::vector<LOADED_MODULE> LoadedModules;
 bool WINAPI DispatchThread(MODULE* target)
 {
     if (SHOULD_RELOCATE(target)) ApplyReloction(target);
-    return ResolveImports(target);
+    return ResolveImports(&target->image);
 }
 
 
@@ -89,9 +89,11 @@ int main(const int argc, char* argv[])
                 }
                 for (UINT x = 0; x < modules.size(); ++x)
                 {
-                    CloseHandle(threads[x]); // cause of both suppressions
+                    CloseHandle(threads[x]); // cause of both suppressions 
                 }
+                LoadedModules.clear();
                 delete[] threads;
+                //modules within LoadedModules aren't free'd cuz it takes WAY more time than its worth
 
 #pragma warning(pop)
 
@@ -101,9 +103,13 @@ int main(const int argc, char* argv[])
                     for (UINT x = 0; x < modules.size(); ++x)
                     {
                         if (IS_API_SET(modules[x].image)) continue;
+
                         status = MapDll(&modules[x]);
                         if (!status) break;
+
+                        if (x > 0) delete[] modules[x].image.MappedAddressPtr;
                     }
+                    if (modules.size() > 1) modules.erase(modules.begin() + 1, modules.end());
 
                     //Running DllMain via thread hijacking
                     if (status != STATUS_FAILURE)

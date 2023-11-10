@@ -176,7 +176,7 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 		}
 	}
 
-	DWORD ProcAddress = reinterpret_cast<DWORD>(GetProcAddress(ModulePtr->LocalHandle, ExportName));
+	const DWORD ProcAddress = reinterpret_cast<DWORD>(GetProcAddress(ModulePtr->LocalHandle, ExportName));
 	if (ProcAddress == NULL)
 	{
 		std::cerr << "[GetLoadedExport] Failed to locate function (" << GetLastError() << ")\n";
@@ -246,10 +246,9 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 }
 
 
-bool ResolveImports(const MODULE* target)
+bool ResolveImports(const IMAGE_DATA* image)
 {
 	//Getting basic import data
-	const auto image = &target->image;
 	const auto ImageBase = image->MappedAddress;
 	const auto ImportDir = ConvertRva<IMAGE_IMPORT_DESCRIPTOR*>(ImageBase, ImportDirectory(image).VirtualAddress, image);
 	

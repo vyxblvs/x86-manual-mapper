@@ -53,7 +53,7 @@ bool GetDependencies(const IMAGE_DATA* image);
 
 void ApplyReloction(const MODULE* TargetModule);
 
-bool ResolveImports(const MODULE* target);
+bool ResolveImports(const IMAGE_DATA* target);
 
 
 //Macros
