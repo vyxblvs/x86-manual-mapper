@@ -47,7 +47,7 @@ int main(const int argc, char* argv[])
         }
     }
 
-    if (status != STATUS_FAILURE)
+    if (status)
     {
         if (GetLoadedModules()) // Populating LoadedModules with every module already present in the target process
         {
@@ -61,15 +61,15 @@ int main(const int argc, char* argv[])
                 {
                     std::cerr << "Failed to allocate memory (" << GetLastError() << ")\n";
                     std::cerr << "Size: " << HexOut << modules[x].image.NT_HEADERS->OptionalHeader.SizeOfImage << '\n';
-                    status = STATUS_FAILURE;
+                    status = false;
                     break;
                 }
 
                 status = GetDependencies(&modules[x].image);
-                if (status == STATUS_FAILURE) break;
+                if (!status) break;
             }
 
-            if (status != STATUS_FAILURE)
+            if (status)
             {
 #pragma warning(push)
 #pragma warning(disable: 6385 6001)
@@ -85,7 +85,7 @@ int main(const int argc, char* argv[])
                 {
                     WaitForSingleObject(threads[x], INFINITE);
                     GetExitCodeThread(threads[x], reinterpret_cast<DWORD*>(&status));
-                    if (status == STATUS_FAILURE) break;
+                    if (!status) break;
                 }
                 for (UINT x = 0; x < modules.size(); ++x)
                 {
@@ -97,7 +97,7 @@ int main(const int argc, char* argv[])
 
 #pragma warning(pop)
 
-                if (status != STATUS_FAILURE)
+                if (status)
                 {
                     //Mapping modules into memory
                     for (UINT x = 0; x < modules.size(); ++x)
@@ -112,7 +112,7 @@ int main(const int argc, char* argv[])
                     if (modules.size() > 1) modules.erase(modules.begin() + 1, modules.end());
 
                     //Running DllMain via thread hijacking
-                    if (status != STATUS_FAILURE)
+                    if (status)
                     {
                         status = HijackThread();
                         if(status) std::cout << "Successfully mapped dll!\n";

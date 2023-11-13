@@ -26,5 +26,3 @@ template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType bas
 #define wpm(address, buffer, size) WriteProcessMemory(process, reinterpret_cast<LPVOID>(address), buffer, size, nullptr)
 
 #define HexOut "0x" << std::uppercase << std::hex
-
-#define STATUS_FAILURE 0

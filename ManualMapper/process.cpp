@@ -179,55 +179,51 @@ bool HijackThread()
 	if (!Wow64GetThreadContext(thread, &context))
 	{
 		std::cerr << "Failed to get thread context (" << GetLastError() << ")\n";
+		goto exit;
 	}
 
-	//Pushing DllMain parameters & return address onto thread stack
-	else
+	// Pushing DllMain parameters & return address onto thread stack
+	context.Esp -= 4; // LPVOID lpvReserved
+	if (!wpm(context.Esp, &reserved, sizeof(LPVOID)))
 	{
-		context.Esp -= 4; //LPVOID lpvReserved
-		if (!wpm(context.Esp, &reserved, sizeof(LPVOID)))
-		{
-			std::cerr << "Failed to write lpvReserved to stack (" << GetLastError() << ")\n";
-			std::cerr << "Address: " << HexOut << context.Esp << '\n';
-		}
-		else
-		{
-			context.Esp -= 4; //DWORD fdwReason
-			if (!wpm(context.Esp, &reason, sizeof(DWORD)))
-			{
-				std::cerr << "Failed to write fdwReason to stack (" << GetLastError() << ")\n";
-				std::cerr << "Address: " << HexOut << context.Esp << '\n';
-			}
-			else
-			{
-				context.Esp -= 4; //HINSTANCE hinstDLL
-				if (!wpm(context.Esp, &modules[0].ImageBase, sizeof(HINSTANCE)))
-				{
-					std::cerr << "Failed to write hinstDLL to stack (" << GetLastError() << ")\n";
-					std::cerr << "Address: " << HexOut << context.Esp << '\n';
-				}
-				else
-				{
-					context.Esp -= 4; //Return address
-					if (!wpm(context.Esp, &context.Eip, sizeof(DWORD)))
-					{
-						std::cerr << "Failed to write return address to stack (" << GetLastError() << ")\n";
-						std::cerr << "Address: " << HexOut << context.Esp << '\n';
-					}
-					else
-					{
-						context.Eip = modules[0].ImageBase + modules[0].image.NT_HEADERS->OptionalHeader.AddressOfEntryPoint;
-						status = Wow64SetThreadContext(thread, &context);
-						if (!status)
-						{
-							std::cerr << "Failed to set thread context (" << GetLastError() << ")\n";
-						}
-					}
-				}
-			}
-		}
+		std::cerr << "Failed to write lpvReserved to stack (" << GetLastError() << ")\n";
+		std::cerr << "Address: " << HexOut << context.Esp << '\n';
+		goto exit;
 	}
 
+	context.Esp -= 4; // DWORD fdwReason
+	if (!wpm(context.Esp, &reason, sizeof(DWORD)))
+	{
+		std::cerr << "Failed to write fdwReason to stack (" << GetLastError() << ")\n";
+		std::cerr << "Address: " << HexOut << context.Esp << '\n';
+		goto exit;
+	}
+
+	context.Esp -= 4; // HINSTANCE hinstDLL
+	if (!wpm(context.Esp, &modules[0].ImageBase, sizeof(HINSTANCE)))
+	{
+		std::cerr << "Failed to write hinstDLL to stack (" << GetLastError() << ")\n";
+		std::cerr << "Address: " << HexOut << context.Esp << '\n';
+		goto exit;
+	}
+
+	context.Esp -= 4; // Return address
+	if (!wpm(context.Esp, &context.Eip, sizeof(DWORD)))
+	{
+		std::cerr << "Failed to write return address to stack (" << GetLastError() << ")\n";
+		std::cerr << "Address: " << HexOut << context.Esp << '\n';
+		goto exit;
+	}
+
+	context.Eip = modules[0].ImageBase + modules[0].image.NT_HEADERS->OptionalHeader.AddressOfEntryPoint;
+	status = Wow64SetThreadContext(thread, &context);
+	if (!status)
+	{
+		std::cerr << "Failed to set thread context (" << GetLastError() << ")\n";
+		goto exit;
+	}
+
+exit:
 	ResumeThread(thread);
 	CloseHandle(thread);
 	return status;

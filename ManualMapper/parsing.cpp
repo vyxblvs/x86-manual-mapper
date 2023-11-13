@@ -28,7 +28,7 @@ bool GetDll(const char* path, MODULE* buffer)
 	IMAGE_DATA& image = buffer->image;
 
 	image.name = new char[MAX_PATH];
-	memcpy_s(image.name, MAX_PATH, path, MAX_PATH);
+	memcpy(image.name, path, MAX_PATH);
 
 	image.MappedAddress = reinterpret_cast<DWORD>(image_ptr);
 	image.NT_HEADERS = reinterpret_cast<IMAGE_NT_HEADERS32*>(image_ptr + *reinterpret_cast<DWORD*>(image_ptr + 0x3C));
@@ -97,7 +97,7 @@ bool GetDependencies(const IMAGE_DATA* image)
 		directories[1].resize(MAX_PATH);
 		if (!GetModuleFileNameExA(process, nullptr, directories[1].data(), MAX_PATH))
 		{
-			std::cerr << "[GetDependencies] Failed to get process directory (" << GetLastError() << ")\n";
+			std::cerr << "Failed to get process directory (" << GetLastError() << ")\n";
 			return false;
 		}
 
@@ -111,7 +111,7 @@ bool GetDependencies(const IMAGE_DATA* image)
 	const auto MappedAddress   = image->MappedAddress;
 	const auto ImportDirectory = ConvertRva<IMAGE_IMPORT_DESCRIPTOR*>(MappedAddress, ImportTableData.VirtualAddress, image);
 
-	for (ULONG x = 0; x < (ImportTableData.Size / sizeof(IMAGE_IMPORT_DESCRIPTOR)) - 1; ++x)
+	for (UINT x = 0; x < (ImportTableData.Size / sizeof(IMAGE_IMPORT_DESCRIPTOR)) - 1; ++x)
 	{
 		const char* ModuleName = ConvertRva<const char*>(MappedAddress, ImportDirectory[x].Name, image);
 		if (CheckModules(ModuleName)) continue;
