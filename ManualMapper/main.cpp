@@ -25,7 +25,7 @@ int main(const int argc, char* argv[])
     {
     case 1:
         argv[1] = new char[MAX_PATH];
-        __fallthrough;
+        [[fallthrough]];
 
     case 2:
         argv[2] = new char[MAX_PATH];
@@ -44,7 +44,7 @@ int main(const int argc, char* argv[])
     case 1:
         delete[] argv[2];
         argv[2] = nullptr;
-        __fallthrough;
+        [[fallthrough]];
     
     case 2:
         delete[] argv[1];

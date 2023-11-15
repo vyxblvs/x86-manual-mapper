@@ -12,7 +12,7 @@ LOADED_MODULE* FindLoadedModule(const char* name);
 bool CheckModules(const char* target);
 
 
-//Macros
+//Macros (__disable and __enable only work on msvc but i dont give a shit)
 
 template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType base, const DWORD rva, const IMAGE_DATA* image) -> ReturnType
 {
