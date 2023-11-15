@@ -21,10 +21,14 @@ int main(const int argc, char* argv[])
     int status = -1;
 
     //Allocate memory for target data manually if arguments weren't passed
-    if (argc < 3)
+    switch (argc)
     {
+    case 1:
+        argv[1] = new char[MAX_PATH];
+        __fallthrough;
+
+    case 2:
         argv[2] = new char[MAX_PATH];
-        if (argc == 1) argv[1] = new char[MAX_PATH];
     }
 
     if (!CMD_CHECK(argc, argv)) return false; // Check if "-save" was passed as command line argument, save target data if so
@@ -35,16 +39,16 @@ int main(const int argc, char* argv[])
     if (!GetDll(argv[2], &modules.back())) return false;
 
     status = GetProcessHandle(argv[1]);
-    if (argc < 3)
+    switch (argc)
     {
+    case 1:
+        delete[] argv[2];
+        argv[2] = nullptr;
+        __fallthrough;
+    
+    case 2:
         delete[] argv[1];
         argv[1] = nullptr;
-
-        if (argc == 1)
-        {
-            delete[] argv[2];
-            argv[2] = nullptr;
-        }
     }
 
     if (status)
@@ -71,9 +75,6 @@ int main(const int argc, char* argv[])
 
             if (status)
             {
-#pragma warning(push)
-#pragma warning(disable: 6385 6001)
-
                 //Applying relocation & import resolution
                 HANDLE* threads = new HANDLE[modules.size()];
                 for (UINT x = 0; x < modules.size(); ++x)
@@ -81,21 +82,20 @@ int main(const int argc, char* argv[])
                     if (IS_API_SET(modules[x].image)) continue;
                     threads[x] = CreateThread(nullptr, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(DispatchThread), &modules[x], NULL, nullptr);
                 }
-                for (UINT x = 0; x < modules.size(); ++x)
+                for (UINT x = 0; x < modules.size() && status != NULL; ++x)
                 {
                     WaitForSingleObject(threads[x], INFINITE);
                     GetExitCodeThread(threads[x], reinterpret_cast<DWORD*>(&status));
-                    if (!status) break;
                 }
                 for (UINT x = 0; x < modules.size(); ++x)
                 {
-                    CloseHandle(threads[x]); // cause of both suppressions 
+                    __disable(6385 6001);
+                    CloseHandle(threads[x]);
+                    __enable;
                 }
                 LoadedModules.clear();
                 delete[] threads;
                 threads = nullptr;
-
-#pragma warning(pop)
 
                 if (status)
                 {
@@ -103,10 +103,8 @@ int main(const int argc, char* argv[])
                     for (UINT x = 0; x < modules.size(); ++x)
                     {
                         if (IS_API_SET(modules[x].image)) continue;
-
                         status = MapDll(&modules[x]);
                         if (!status) break;
-
                         if (x > 0) delete[] modules[x].image.MappedAddressPtr;
                     }
                     if (modules.size() > 1) modules.erase(modules.begin() + 1, modules.end());

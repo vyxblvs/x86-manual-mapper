@@ -6,7 +6,7 @@
 bool GetProcessHandle(const char* name)
 {
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
-	if (!snapshot)
+	if (snapshot == INVALID_HANDLE_VALUE)
 	{
 		std::cerr << "Failed to take a snapshot of processes (" << GetLastError() << ")\n";
 		return false;
@@ -55,9 +55,6 @@ exit:
 
 bool GetLoadedModules()
 {
-#pragma warning(push)
-#pragma warning(disable: 6385 6386)
-
 	DWORD size;
 	HMODULE handles[1024];
 
@@ -80,13 +77,13 @@ bool GetLoadedModules()
 		LoadedModules.emplace_back(LOADED_MODULE{ reinterpret_cast<DWORD>(handles[x]) });
 		LoadedModules.back().name = new char[length + 1];
 
+		__disable(6385 6386);
 		path[length] = '\0';
 		memcpy(LoadedModules.back().name, path, length + 1);
+		__enable;
 	}
 
 	return true;
-
-#pragma warning(pop)
 }
 
 
@@ -122,7 +119,7 @@ bool MapDll(const MODULE* target)
 	}
 
 	return true;
-}
+} 
 
 
 bool HijackThread()
@@ -133,7 +130,7 @@ bool HijackThread()
 	constexpr int reason   = DLL_PROCESS_ATTACH;
 
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, NULL);
-	if (!snapshot)
+	if (snapshot == INVALID_HANDLE_VALUE)
 	{
 		std::cerr << "Failed to take a snapshot of threads\n";
 		return false;

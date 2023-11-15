@@ -19,10 +19,14 @@ template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType bas
 	return reinterpret_cast<ReturnType>(reinterpret_cast<BYTE*>(base) + GetOffset(rva, image));
 }
 
+#define __disable(...) __pragma(warning(push)) __pragma(warning(disable:__VA_ARGS__))
+
+#define __enable __pragma(warning(pop))
+
+#define HexOut "0x" << std::uppercase << std::hex
+
 #define CheckAttribs(data) (data.dwFileAttributes & FILE_ATTRIBUTE_DEVICE || data.dwFileAttributes >= 256)
 
 #define IsDirectory(data) (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && strcmp(data.cFileName, ".") && strcmp(data.cFileName, ".."))
 
 #define wpm(address, buffer, size) WriteProcessMemory(process, reinterpret_cast<LPVOID>(address), buffer, size, nullptr)
-
-#define HexOut "0x" << std::uppercase << std::hex
