@@ -16,6 +16,16 @@ bool WINAPI DispatchThread(MODULE* target)
 }
 
 
+void WINAPI UnloadModules()
+{
+    for (UINT x = 0; x < LoadedModules.size(); ++x)
+    {
+        if (LoadedModules[x].LocalHandle) FreeLibrary(LoadedModules[x].LocalHandle);
+    }
+    LoadedModules.clear();
+}
+
+
 int main(const int argc, char* argv[])
 {
     int status = -1;
@@ -80,7 +90,7 @@ int main(const int argc, char* argv[])
                 for (UINT x = 0; x < modules.size(); ++x)
                 {
                     if (IS_API_SET(modules[x].image)) continue;
-                    threads[x] = CreateThread(nullptr, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(DispatchThread), &modules[x], NULL, nullptr);
+                    threads[x] = __CreateThread(DispatchThread, &modules[x]);
                 }
                 for (UINT x = 0; x < modules.size() && status != NULL; ++x)
                 {
@@ -93,7 +103,8 @@ int main(const int argc, char* argv[])
                     CloseHandle(threads[x]);
                     __enable;
                 }
-                LoadedModules.clear();
+
+                __CreateThread(UnloadModules, nullptr);
                 delete[] threads;
                 threads = nullptr;
 

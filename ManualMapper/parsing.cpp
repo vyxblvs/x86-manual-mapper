@@ -28,7 +28,7 @@ bool GetDll(const char* path, MODULE* buffer)
 	IMAGE_DATA& image = buffer->image;
 
 	image.name = new char[MAX_PATH];
-	memcpy(image.name, path, MAX_PATH);
+	strcpy_s(image.name, MAX_PATH, path);
 
 	image.MappedAddress = reinterpret_cast<DWORD>(image_ptr);
 	image.NT_HEADERS = reinterpret_cast<IMAGE_NT_HEADERS32*>(image_ptr + *reinterpret_cast<DWORD*>(image_ptr + 0x3C));
@@ -47,10 +47,12 @@ bool GetDll(const char* path, MODULE* buffer)
 }
 
 
-bool FindModuleDir(const char* target, const std::string dir)
+bool FindModuleDir(const char* target, std::string dir)
 {
+	dir += '\\';
+
 	WIN32_FIND_DATAA data;
-	const HANDLE search = FindFirstFileExA((dir + "\\*").c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
+	const HANDLE search = FindFirstFileExA((dir + '*').c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
 	if (!search)
 	{
 		std::cerr << "FindFirstFileExA Failed (" << GetLastError() << ")\n";
@@ -60,9 +62,10 @@ bool FindModuleDir(const char* target, const std::string dir)
 
 	do
 	{
-		const std::string path = dir + "\\" + data.cFileName;
-		
 		if (CheckAttribs(data)) continue;
+
+		char path[MAX_PATH];
+		strcpy_s(path, MAX_PATH, (dir + data.cFileName).c_str());
 
 		if (IsDirectory(data))
 		{
@@ -77,7 +80,7 @@ bool FindModuleDir(const char* target, const std::string dir)
 		{
 			FindClose(search);
 			modules.emplace_back(MODULE{ NULL });
-			return GetDll(path.c_str(), &modules.back());
+			return GetDll(path, &modules.back());
 		}
 
 	} while (FindNextFileA(search, &data) && GetLastError() != ERROR_NO_MORE_FILES);
@@ -101,8 +104,7 @@ bool GetDependencies(const IMAGE_DATA* image)
 			return false;
 		}
 
-		const UINT pos = directories[1].find_last_of('\\');
-		directories[1] = directories[1].substr(0, pos);
+		directories[1] = directories[1].substr(0, directories[1].find_last_of('\\'));
 	}
 
 	const IMAGE_DATA_DIRECTORY ImportTableData = ImportDirectory(image); 

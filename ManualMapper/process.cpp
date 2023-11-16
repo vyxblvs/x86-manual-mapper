@@ -74,13 +74,14 @@ bool GetLoadedModules()
 			return false;
 		}
 
+		__disable(6386);
+		path[length] = '\0';
+		__enable(6386);
+
 		LoadedModules.emplace_back(LOADED_MODULE{ reinterpret_cast<DWORD>(handles[x]) });
 		LoadedModules.back().name = new char[length + 1];
 
-		__disable(6385 6386);
-		path[length] = '\0';
-		memcpy(LoadedModules.back().name, path, length + 1);
-		__enable;
+		strcpy_s(LoadedModules.back().name, length + 1, path);
 	}
 
 	return true;
@@ -159,6 +160,7 @@ bool HijackThread()
 	if (!thread)
 	{
 		std::cerr << "Failed to locate valid thread\n";
+		CloseHandle(snapshot);
 		return false;
 	}
 
