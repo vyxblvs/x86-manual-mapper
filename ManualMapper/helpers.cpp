@@ -2,11 +2,11 @@
 #include "helpers.h"
 
 
-DWORD GetOffset(const DWORD rva, const IMAGE_DATA* image)
+DWORD GetOffset(const DWORD rva, const IMAGE_DATA* const image)
 {
 	const IMAGE_SECTION_HEADER* SectionHeader = image->sections;
 
-	for (ULONG x = 0; x < image->NT_HEADERS->FileHeader.NumberOfSections; ++x)
+	for (UINT x = 0; x < image->NT_HEADERS->FileHeader.NumberOfSections; ++x)
 	{
 		if (rva >= SectionHeader[x].VirtualAddress && rva <= (SectionHeader[x].VirtualAddress + SectionHeader[x].Misc.VirtualSize))
 		{
@@ -21,38 +21,34 @@ DWORD GetOffset(const DWORD rva, const IMAGE_DATA* image)
 }
 
 
-std::string PathToImage(const std::string path)
+bool ImageCmp(const std::string path, const char* const name)
 {
-	const UINT pos = path.find_last_of('\\') + 1;
-	return path.substr(pos);
+	return _stricmp((path.substr(path.find_last_of('\\') + 1)).c_str(), name) == 0;
 }
 
 
-LOADED_MODULE* FindLoadedModule(const char* name)
+LOADED_MODULE* GetLoadedModule(const char* const name)
 {
 	for (UINT x = 0; x < LoadedModules.size(); ++x)
 	{
-		if (_stricmp(name, PathToImage(LoadedModules[x].name).c_str()) == 0)
-			return &LoadedModules[x];
+		if (ImageCmp(LoadedModules[x].name, name)) return &LoadedModules[x];
 	}
 
 	return nullptr;
 }
 
 
-bool CheckModules(const char* target)
+bool CheckModules(const char* const target)
 {
 	for (UINT x = 0; x < modules.size(); ++x)
 	{
-		if (_stricmp(target, PathToImage(modules[x].image.name).c_str()) == 0)
-			return true;
+		if (ImageCmp(modules[x].image.name, target)) return true;
 	}
 
 	for (UINT x = 0; x < LoadedModules.size(); ++x)
 	{
-		if (_stricmp(target, PathToImage(LoadedModules[x].name).c_str()) == 0) 
-			return true;
+		if (ImageCmp(LoadedModules[x].name, target)) return true;
 	}
 
 	return false;
-}
+} 

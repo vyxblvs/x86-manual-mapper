@@ -6,38 +6,22 @@
 struct IMAGE_DATA
 {
 	char* name;
-
-	union
-	{
-		BYTE* MappedAddressPtr;
-		DWORD MappedAddress;
-	};
-
-	IMAGE_NT_HEADERS32* NT_HEADERS;
-	IMAGE_SECTION_HEADER* sections;
+	const char* MappedAddress;
+	const IMAGE_NT_HEADERS32* NT_HEADERS;
+	const IMAGE_SECTION_HEADER* sections;
 };
 
 struct MODULE
 {
 	IMAGE_DATA image;
-
-	union
-	{
-		void* BasePtr;
-		DWORD ImageBase;
-	};
+	DWORD ImageBase;
 };
 
 struct LOADED_MODULE
 {
 	DWORD base = 0;
 	char* name;
-	
-	union
-	{
-		HMODULE LocalHandle;
-		DWORD LocalBase;
-	};
+	HMODULE handle;
 };
 
 
@@ -47,23 +31,19 @@ extern HANDLE process;
 extern std::vector<MODULE> modules;
 extern std::vector<LOADED_MODULE> LoadedModules;
 
-bool GetDll(const char* path, MODULE* buffer);
+bool GetDll(const char* path, MODULE* const buffer);
 
-bool GetDependencies(const IMAGE_DATA* image);
+bool GetDependencies(const IMAGE_DATA* const image);
 
 void ApplyReloction(const MODULE* TargetModule);
 
-bool ResolveImports(const IMAGE_DATA* target);
+bool ResolveImports(const IMAGE_DATA* const target);
 
 
 //Macros
 
-#define ImportDirectory(image) image->NT_HEADERS->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT]
+#define DataDirectory(image, directory) image->NT_HEADERS->OptionalHeader.DataDirectory[directory]
 
-#define ExportDirectory(image) image->NT_HEADERS->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT]
+#define IS_API_SET(image) DataDirectory((&image), IMAGE_DIRECTORY_ENTRY_IMPORT).Size == 0
 
-#define RelocationDirectory(image) image->NT_HEADERS->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC]
-
-#define IS_API_SET(image) ImportDirectory((&image)).Size == NULL
-
-#define SHOULD_RELOCATE(ModulePtr) ModulePtr->ImageBase != ModulePtr->image.NT_HEADERS->OptionalHeader.ImageBase && RelocationDirectory((&ModulePtr->image)).Size != 0
+#define SHOULD_RELOCATE(ModulePtr) ModulePtr->ImageBase != ModulePtr->image.NT_HEADERS->OptionalHeader.ImageBase && DataDirectory((&ModulePtr->image), IMAGE_DIRECTORY_ENTRY_BASERELOC).Size != 0

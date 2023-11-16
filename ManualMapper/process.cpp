@@ -3,7 +3,7 @@
 #include "helpers.h"
 
 
-bool GetProcessHandle(const char* name)
+bool GetProcessHandle(const char* const name)
 {
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
 	if (snapshot == INVALID_HANDLE_VALUE)
@@ -66,18 +66,15 @@ bool GetLoadedModules()
 
 	for (UINT x = 0; x < size / sizeof(HMODULE); ++x)
 	{
-		char path[MAX_PATH];
+		char path[MAX_PATH + 1];
 		const UINT length = GetModuleFileNameExA(process, handles[x], path, MAX_PATH);
-		if (!length)
+		if (!length || length > MAX_PATH)
 		{
 			std::cerr << "[GetLoadedModules()] Failed to get module path (" << GetLastError() << ")\n";
 			return false;
 		}
 
-		__disable(6386);
 		path[length] = '\0';
-		__enable(6386);
-
 		LoadedModules.emplace_back(LOADED_MODULE{ reinterpret_cast<DWORD>(handles[x]) });
 		LoadedModules.back().name = new char[length + 1];
 
@@ -88,13 +85,13 @@ bool GetLoadedModules()
 }
 
 
-bool MapDll(const MODULE* target)
+bool MapDll(const MODULE* const target)
 {
-	const auto image = &target->image;
-	const auto sections = image->sections;
+	const IMAGE_DATA* const image = &target->image;
+	const IMAGE_SECTION_HEADER* const sections = image->sections;
 
 	//Mapping headers
-	if (!wpm(target->BasePtr, image->MappedAddressPtr, sections[0].PointerToRawData))
+	if (!wpm(target->ImageBase, image->MappedAddress, sections[0].PointerToRawData))
 	{
 		std::cerr << "Failed to map PE headers into memory (" << GetLastError() << ")\n";
 		std::cerr << "Image: " << image->name << '\n';
@@ -102,13 +99,13 @@ bool MapDll(const MODULE* target)
 	}
 
 	DWORD old;
-	VirtualProtectEx(process, target->BasePtr, sections[0].PointerToRawData, PAGE_READONLY, &old);
+	VirtualProtectEx(process, reinterpret_cast<void*>(target->ImageBase), sections[0].PointerToRawData, PAGE_READONLY, &old);
 
 	//Mapping sections
 	for (UINT x = 0; x < image->NT_HEADERS->FileHeader.NumberOfSections; ++x)
 	{
-		void* address = reinterpret_cast<void*>(target->ImageBase + sections[x].VirtualAddress);
-		const void* section = image->MappedAddressPtr + sections[x].PointerToRawData;
+		void* const address = reinterpret_cast<void*>(target->ImageBase + sections[x].VirtualAddress);
+		const void* const section = image->MappedAddress + sections[x].PointerToRawData;
 		if (!wpm(address, section, sections[x].SizeOfRawData))
 		{
 			std::cerr << "Failed to map section into memory (" << GetLastError() << ")\n";

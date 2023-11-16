@@ -3,7 +3,7 @@
 #include "helpers.h"
 
 
-bool GetDll(const char* path, MODULE* buffer)
+bool GetDll(const char* const path, MODULE* const buffer)
 {
 	if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES)
 	{
@@ -19,18 +19,18 @@ bool GetDll(const char* path, MODULE* buffer)
 	}
 
 	const UINT size = static_cast<UINT>(file.tellg());
-	char* image_ptr = new char[size];
+	char* const image_ptr = new char[size];
 
 	file.seekg(0, std::ios::beg);
 	file.read(image_ptr, size);
 	file.close();
 
-	IMAGE_DATA& image = buffer->image;
+	IMAGE_DATA& const image = buffer->image;
 
 	image.name = new char[MAX_PATH];
 	strcpy_s(image.name, MAX_PATH, path);
 
-	image.MappedAddress = reinterpret_cast<DWORD>(image_ptr);
+	image.MappedAddress = image_ptr;
 	image.NT_HEADERS = reinterpret_cast<IMAGE_NT_HEADERS32*>(image_ptr + *reinterpret_cast<DWORD*>(image_ptr + 0x3C));
 	image.sections = IMAGE_FIRST_SECTION(image.NT_HEADERS);
 
@@ -47,10 +47,9 @@ bool GetDll(const char* path, MODULE* buffer)
 }
 
 
-bool FindModuleDir(const char* target, std::string dir)
+bool FindModuleDir(const char* const target, std::string dir)
 {
 	dir += '\\';
-
 	WIN32_FIND_DATAA data;
 	const HANDLE search = FindFirstFileExA((dir + '*').c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
 	if (!search)
@@ -91,36 +90,35 @@ bool FindModuleDir(const char* target, std::string dir)
 }
 
 
-bool GetDependencies(const IMAGE_DATA* image)
+bool GetDependencies(const IMAGE_DATA* const image)
 {
 	//Initialize directories to be searched for unloaded modules
-	static std::string directories[2]{ "c:\\Windows\\SysWOW64" };
-	if (directories[1].empty())
+	static char directories[2][MAX_PATH]{ "c:\\Windows\\SysWOW64", '\0'};
+	if (!directories[1][0])
 	{
-		directories[1].resize(MAX_PATH);
-		if (!GetModuleFileNameExA(process, nullptr, directories[1].data(), MAX_PATH))
+		std::string buffer(MAX_PATH, NULL);
+		if (!GetModuleFileNameExA(process, nullptr, buffer.data(), MAX_PATH))
 		{
 			std::cerr << "Failed to get process directory (" << GetLastError() << ")\n";
 			return false;
 		}
-
-		directories[1] = directories[1].substr(0, directories[1].find_last_of('\\'));
+		strcpy_s(directories[1], MAX_PATH, (buffer.substr(0, buffer.find_last_of('\\'))).c_str());
 	}
 
-	const IMAGE_DATA_DIRECTORY ImportTableData = ImportDirectory(image); 
+	const IMAGE_DATA_DIRECTORY ImportTableData = DataDirectory(image, IMAGE_DIRECTORY_ENTRY_IMPORT); 
 	if (!ImportTableData.Size) return true;
 
-	const auto MappedAddress   = image->MappedAddress;
-	const auto ImportDirectory = ConvertRva<IMAGE_IMPORT_DESCRIPTOR*>(MappedAddress, ImportTableData.VirtualAddress, image);
+	const char* const MappedAddress = image->MappedAddress;
+	const auto ImportDirectory = ConvertRva<const IMAGE_IMPORT_DESCRIPTOR*>(MappedAddress, ImportTableData.VirtualAddress, image);
 
 	for (UINT x = 0; x < (ImportTableData.Size / sizeof(IMAGE_IMPORT_DESCRIPTOR)) - 1; ++x)
 	{
-		const char* ModuleName = ConvertRva<const char*>(MappedAddress, ImportDirectory[x].Name, image);
+		const char* const ModuleName = ConvertRva<const char*>(MappedAddress, ImportDirectory[x].Name, image);
 		if (CheckModules(ModuleName)) continue;
 
-		for (UINT y = 0; y < (sizeof(directories) / sizeof(std::string)); ++y)
+		for (UINT y = 0, num_of_paths = sizeof(directories) / MAX_PATH; y < num_of_paths; ++y)
 		{
-			if (!FindModuleDir(ModuleName, directories[y]) && y == 2)
+			if (!FindModuleDir(ModuleName, directories[y]) && y == num_of_paths)
 			{
 				std::cerr << "[GetDependencies] Failed to locate module: " << ModuleName << '\n';
 				return false;
@@ -135,42 +133,32 @@ bool GetDependencies(const IMAGE_DATA* image)
 void ApplyReloction(const MODULE* TargetModule)
 {
 	const auto image   = &TargetModule->image;
-	const auto DataDir = RelocationDirectory(image);
+	const auto DataDir = DataDirectory(image, IMAGE_DIRECTORY_ENTRY_BASERELOC);
 
 	auto RelocBlock = ConvertRva<IMAGE_BASE_RELOCATION*>(image->MappedAddress, DataDir.VirtualAddress, image);
-	const auto FinalEntry = reinterpret_cast<BYTE*>(RelocBlock) + DataDir.Size;
+	const BYTE* const FinalEntry = reinterpret_cast<BYTE*>(RelocBlock) + DataDir.Size;
 
 	while (reinterpret_cast<BYTE*>(RelocBlock) < FinalEntry)
 	{
-		const WORD* entry = reinterpret_cast<WORD*>(RelocBlock) + 4;
+		const auto entry = reinterpret_cast<const WORD*>(RelocBlock) + 4;
 
 		for (UINT y = 0; entry[y] != IMAGE_REL_BASED_ABSOLUTE && y < (RelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD); ++y)
 		{
-			DWORD* RelocAddress = ConvertRva<DWORD*>(image->MappedAddress, entry[y] % 0x1000 + RelocBlock->VirtualAddress, image);
+			DWORD* const RelocAddress = ConvertRva<DWORD*>(image->MappedAddress, entry[y] % 0x1000 + RelocBlock->VirtualAddress, image);
 			*RelocAddress = (*RelocAddress - image->NT_HEADERS->OptionalHeader.ImageBase) + TargetModule->ImageBase;
 		}
 
 		RelocBlock = reinterpret_cast<IMAGE_BASE_RELOCATION*>(reinterpret_cast<BYTE*>(RelocBlock) + RelocBlock->SizeOfBlock);
 	}
-
-	return;
 }
 
 
-bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buffer)
+bool GetLoadedExport(LOADED_MODULE* const ModulePtr, const char* const ExportName, DWORD* const buffer)
 {
-	LOADED_MODULE* ModulePtr = FindLoadedModule(ModuleName);
-	if (ModulePtr == nullptr)
+	if (!ModulePtr->handle)
 	{
-		std::cerr << "[GetLoadedExport] Failed to locate loaded module: " << ModuleName << '\n';
-		return false;
-	}
-
-	//Loading the module locally so I can call GetProcAddress
-	if (!ModulePtr->LocalBase)
-	{
-		ModulePtr->LocalHandle = LoadLibraryA(ModulePtr->name);
-		if (!ModulePtr->LocalHandle)
+		ModulePtr->handle = LoadLibraryA(ModulePtr->name);
+		if (!ModulePtr->handle)
 		{
 			std::cerr << "[GetLoadedExport] Failed to load module (" << GetLastError() << ")\n";
 			std::cerr << "Path: " << ModulePtr->name << '\n';
@@ -178,28 +166,28 @@ bool GetLoadedExport(const char* ModuleName, const char* ExportName, DWORD* buff
 		}
 	}
 
-	const DWORD ProcAddress = reinterpret_cast<DWORD>(GetProcAddress(ModulePtr->LocalHandle, ExportName));
-	if (ProcAddress == NULL)
+	const DWORD ProcAddress = reinterpret_cast<DWORD>(GetProcAddress(ModulePtr->handle, ExportName));
+	if (!ProcAddress)
 	{
 		std::cerr << "[GetLoadedExport] Failed to locate function (" << GetLastError() << ")\n";
 		std::cerr << "Function name: " << ExportName << '\n';
-		std::cerr << "Module: " << ModuleName << '\n';
+		std::cerr << "Module: " << ModulePtr->name << '\n';
 		return false;
 	}
 
-	*buffer = ModulePtr->base + (ProcAddress - ModulePtr->LocalBase);
+	*buffer = ModulePtr->base + (ProcAddress - reinterpret_cast<DWORD>(ModulePtr->handle));
 	
 	return true;
 }
 
 
-bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* buffer)
+bool GetUnloadedExport(const char* const ModuleName, const char* const ImportName, DWORD* const buffer)
 {
 	//Locating the imported module
-	MODULE* ModulePtr = nullptr;
+	const MODULE* ModulePtr = nullptr;
 	for (UINT x = 0; x < modules.size(); ++x)
 	{
-		if (_stricmp(ModuleName, PathToImage(modules[x].image.name).c_str()) == 0)
+		if (ImageCmp(modules[x].image.name, ModuleName))
 		{
 			ModulePtr = &modules[x];
 			break;
@@ -213,18 +201,18 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 	}
 
 	//Getting basic export data
-	const auto image		 = &ModulePtr->image;
-	const auto ImageBase	 = image->MappedAddress;
-	const auto ExportDirData = ExportDirectory(image);
-	const auto ExportDir     = ConvertRva<IMAGE_EXPORT_DIRECTORY*>(ImageBase, ExportDirData.VirtualAddress, image);
-	const auto ExportTable   = ConvertRva<DWORD*>(ImageBase, ExportDir->AddressOfFunctions,    image);
-	const auto NamePtrTable  = ConvertRva<DWORD*>(ImageBase, ExportDir->AddressOfNames,        image);
-	const auto OrdinalTable  = ConvertRva<WORD*> (ImageBase, ExportDir->AddressOfNameOrdinals, image);
+	const auto image         = &ModulePtr->image;
+	const auto MappedAddress = image->MappedAddress;
+	const auto ExportDirData = DataDirectory(image, IMAGE_DIRECTORY_ENTRY_EXPORT);
+	const auto ExportDir     = ConvertRva<IMAGE_EXPORT_DIRECTORY*>(MappedAddress, ExportDirData.VirtualAddress, image);
+	const auto ExportTable   = ConvertRva<DWORD*>(MappedAddress, ExportDir->AddressOfFunctions,    image);
+	const auto NamePtrTable  = ConvertRva<DWORD*>(MappedAddress, ExportDir->AddressOfNames,        image);
+	const auto OrdinalTable  = ConvertRva<WORD*> (MappedAddress, ExportDir->AddressOfNameOrdinals, image);
 
 	//Parsing the export directory for a function match
 	for(UINT x = 0; x < ExportDir->NumberOfFunctions; ++x)
 	{
-		const auto ExportName = ConvertRva<const char*>(ImageBase, NamePtrTable[x], image);
+		const auto ExportName = ConvertRva<const char*>(MappedAddress, NamePtrTable[x], image);
 		if (_stricmp(ImportName, ExportName) == 0)
 		{
 			//Getting the Export Address Table index for the matched function
@@ -233,8 +221,14 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 			//Handling forwarders
 			if ((ExportTable[index] >= ExportDirData.VirtualAddress) && (ExportTable[index] < ExportDirData.VirtualAddress + ExportDirData.Size))
 			{
-				const std::string forwarder = ConvertRva<const char*>(ImageBase, ExportTable[index], image);
-				return GetLoadedExport((forwarder.substr(0, forwarder.find_last_of('.') + 1) + "dll").c_str(), ExportName, buffer);
+				const std::string forwarder = ConvertRva<const char*>(MappedAddress, ExportTable[index], image);
+				LOADED_MODULE* const ModulePtr = GetLoadedModule((forwarder.substr(0, forwarder.find_last_of('.') + 1) + "dll").c_str());
+				if (!ModulePtr)
+				{
+					std::cout << "Failed to locate module imported via forwarding: " << ModuleName << '\n';
+					return false;
+				}
+				return GetLoadedExport(ModulePtr, ExportName, buffer);
 			}
 			else *buffer = ModulePtr->ImageBase + ExportTable[index];
 
@@ -248,34 +242,34 @@ bool GetUnloadedExport(const char* ModuleName, const char* ImportName, DWORD* bu
 }
 
 
-bool ResolveImports(const IMAGE_DATA* image)
+bool ResolveImports(const IMAGE_DATA* const image)
 {
 	//Getting basic import data
-	const auto ImageBase = image->MappedAddress;
-	const auto ImportDir = ConvertRva<IMAGE_IMPORT_DESCRIPTOR*>(ImageBase, ImportDirectory(image).VirtualAddress, image);
+	const char* const MappedAddress = image->MappedAddress;
+	const auto ImportDir = ConvertRva<const IMAGE_IMPORT_DESCRIPTOR*>(MappedAddress, DataDirectory(image, IMAGE_DIRECTORY_ENTRY_IMPORT).VirtualAddress, image);
 	
 	//Parsing IDT (final entry is NULL)
 	for (UINT x = 0; ImportDir[x].Name != NULL; ++x)
 	{
-		const auto ImportTable = ConvertRva<IMAGE_THUNK_DATA32*>(ImageBase, ImportDir[x].FirstThunk,	  image);
-		const auto LookupTable = ConvertRva<IMAGE_THUNK_DATA32*>(ImageBase, ImportDir[x].Characteristics, image);
-		const auto ModuleName  = ConvertRva<const char*> (ImageBase, ImportDir[x].Name, image);
+		const auto ImportTable = ConvertRva<IMAGE_THUNK_DATA32*>(MappedAddress, ImportDir[x].FirstThunk, image);
+		const auto LookupTable = ConvertRva<const IMAGE_THUNK_DATA32*>(MappedAddress, ImportDir[x].Characteristics, image);
+		const auto ModuleName  = ConvertRva<const char*> (MappedAddress, ImportDir[x].Name, image);
 
 		//Checking if the indexed module is already loaded within the target process
-		const bool IsModuleLoaded = reinterpret_cast<int>(FindLoadedModule(ModuleName)) > 0; 
+		LOADED_MODULE* const ModuleIndex = GetLoadedModule(ModuleName); 
 
 		//Going through each function imported from the indexed module (ILT ends with NULL entry)
 		for (UINT y = 0; LookupTable[y].u1.Function != NULL; ++y)
 		{
-			const char* ImportName = ConvertRva<IMAGE_IMPORT_BY_NAME*>(ImageBase, LookupTable[y].u1.AddressOfData, image)->Name;
+			const char* const ImportName = ConvertRva<IMAGE_IMPORT_BY_NAME*>(MappedAddress, LookupTable[y].u1.AddressOfData, image)->Name;
 
-			if (IsModuleLoaded)
+			if (ModuleIndex)
 			{
-				if (GetLoadedExport(ModuleName, ImportName, &ImportTable[y].u1.AddressOfData) == false) return false;
+				if (!GetLoadedExport(ModuleIndex, ImportName, &ImportTable[y].u1.AddressOfData)) return false;
 			}
 			else
 			{
-				if (GetUnloadedExport(ModuleName, ImportName, &ImportTable[y].u1.AddressOfData) == false) return false;
+				if (!GetUnloadedExport(ModuleName, ImportName, &ImportTable[y].u1.AddressOfData)) return false;
 			}
 		}
 	}

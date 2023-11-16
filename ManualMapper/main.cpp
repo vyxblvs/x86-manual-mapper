@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "config.h"
 #include "process.h"
 #include "parsing.h"
 #include "helpers.h"
@@ -20,7 +19,8 @@ void WINAPI UnloadModules()
 {
     for (UINT x = 0; x < LoadedModules.size(); ++x)
     {
-        if (LoadedModules[x].LocalHandle) FreeLibrary(LoadedModules[x].LocalHandle);
+        if (LoadedModules[x].handle) FreeLibrary(LoadedModules[x].handle);
+        delete[] LoadedModules[x].name;
     }
     LoadedModules.clear();
 }
@@ -41,8 +41,32 @@ int main(const int argc, char* argv[])
         argv[2] = new char[MAX_PATH];
     }
 
-    if (!CMD_CHECK(argc, argv)) return false; // Check if "-save" was passed as command line argument, save target data if so
-    if (!CFG_CHECK(argc, argv)) return false; // Load default target info if none were passed as command line argument
+    //Loading or saving target data
+    if (argc == 1 || argc == 4)
+    {
+        std::string buffer(MAX_PATH, NULL);
+        GetModuleFileNameA(nullptr, buffer.data(), MAX_PATH);
+
+        std::fstream file(buffer.substr(0, buffer.find_last_of('\\') + 1) + "cfg.txt");
+        if (file.fail())
+        {
+            std::cout << "Failed to open cfg.txt\n";
+            return false;
+        }
+
+        if (argc == 1)
+        {
+            file.getline(argv[1], MAX_PATH);
+            file.getline(argv[2], MAX_PATH);
+        }
+        else if (_stricmp(argv[3], "-save") == 0)
+        {
+            file << argv[1] << '\n';
+            file << argv[2] << '\n';
+        }
+
+        file.close();
+    }
 
     //Load user specified DLL
     modules.emplace_back(MODULE{ NULL });
@@ -70,8 +94,8 @@ int main(const int argc, char* argv[])
             {
                 if (IS_API_SET(modules[x].image)) continue;
 
-                modules[x].BasePtr = VirtualAllocEx(process, nullptr, modules[x].image.NT_HEADERS->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-                if (!modules[x].BasePtr)
+                modules[x].ImageBase = reinterpret_cast<DWORD>(VirtualAllocEx(process, nullptr, modules[x].image.NT_HEADERS->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+                if (!modules[x].ImageBase)
                 {
                     std::cerr << "Failed to allocate memory (" << GetLastError() << ")\n";
                     std::cerr << "Size: " << HexOut << modules[x].image.NT_HEADERS->OptionalHeader.SizeOfImage << '\n';
@@ -99,9 +123,9 @@ int main(const int argc, char* argv[])
                 }
                 for (UINT x = 0; x < modules.size(); ++x)
                 {
-                    __disable(6385 6001);
+                    __pragma(warning(push)) __pragma(warning(disable:6385 6001));
                     CloseHandle(threads[x]);
-                    __enable;
+                    __pragma(warning(pop));
                 }
 
                 __CreateThread(UnloadModules, nullptr);
@@ -116,7 +140,11 @@ int main(const int argc, char* argv[])
                         if (IS_API_SET(modules[x].image)) continue;
                         status = MapDll(&modules[x]);
                         if (!status) break;
-                        if (x > 0) delete[] modules[x].image.MappedAddressPtr;
+                        if (x > 0)
+                        {
+                            delete[] modules[x].image.MappedAddress;
+                            delete[] modules[x].image.name;
+                        }
                     }
                     if (modules.size() > 1) modules.erase(modules.begin() + 1, modules.end());
 

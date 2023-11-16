@@ -3,25 +3,22 @@
 
 //Forward Declarations
 
-DWORD GetOffset(const DWORD rva, const IMAGE_DATA* image);
+DWORD GetOffset(const DWORD rva, const IMAGE_DATA* const image);
 
-std::string PathToImage(const std::string path);
+bool ImageCmp(std::string path, const char* const name);
 
-LOADED_MODULE* FindLoadedModule(const char* name);
+LOADED_MODULE* GetLoadedModule(const char* const name);
 
 bool CheckModules(const char* target);
 
 
-//Macros (__disable and __enable only work on msvc but i dont give a shit)
+//Macros
 
-template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType base, const DWORD rva, const IMAGE_DATA* image) -> ReturnType
+template <typename ret> auto ConvertRva(const void* const base, const DWORD rva, const IMAGE_DATA* const image) -> ret
 {
-	return reinterpret_cast<ReturnType>(reinterpret_cast<BYTE*>(base) + GetOffset(rva, image));
+	const DWORD offset = GetOffset(rva, image);
+	return offset ? reinterpret_cast<ret>(reinterpret_cast<DWORD>(base) + offset) : nullptr;
 }
-
-#define __disable(...) __pragma(warning(push)) __pragma(warning(disable:__VA_ARGS__))
-
-#define __enable __pragma(warning(pop))
 
 #define HexOut "0x" << std::uppercase << std::hex
 
@@ -29,4 +26,4 @@ template <typename ReturnType, typename ParamType> auto ConvertRva(ParamType bas
 
 #define IsDirectory(data) (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && strcmp(data.cFileName, ".") && strcmp(data.cFileName, ".."))
 
-#define wpm(address, buffer, size) WriteProcessMemory(process, reinterpret_cast<LPVOID>(address), buffer, size, nullptr)
+#define wpm(address, buffer, size) WriteProcessMemory(process, reinterpret_cast<void*>(address), buffer, size, nullptr)
