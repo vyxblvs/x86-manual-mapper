@@ -142,8 +142,9 @@ int main(const int argc, char* argv[])
                         if (!status) break;
                         if (x > 0)
                         {
-                            delete[] modules[x].image.MappedAddress;
                             delete[] modules[x].image.path;
+                            delete[] modules[x].image.MappedAddress;
+                            memset(&modules[x].image, NULL, sizeof(IMAGE_DATA));
                         }
                     }
                     if (modules.size() > 1) modules.erase(modules.begin() + 1, modules.end());
