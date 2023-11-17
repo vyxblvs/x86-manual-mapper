@@ -22,8 +22,6 @@ template <typename ret> auto ConvertRva(const void* const base, const DWORD rva,
 
 #define HexOut "0x" << std::uppercase << std::hex
 
-#define CheckAttribs(data) (data.dwFileAttributes & FILE_ATTRIBUTE_DEVICE || data.dwFileAttributes >= 256)
-
 #define IsDirectory(data) (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && strcmp(data.cFileName, ".") && strcmp(data.cFileName, ".."))
 
 #define wpm(address, buffer, size) WriteProcessMemory(process, reinterpret_cast<void*>(address), buffer, size, nullptr)

@@ -15,7 +15,7 @@ DWORD GetOffset(const DWORD rva, const IMAGE_DATA* const image)
 	}
 
 	std::cerr << "Failed to find file offset\n";
-	std::cerr << "Module: " << image->name << '\n';
+	std::cerr << "Module: " << image->path << '\n';
 	std::cerr << "RVA: " << HexOut << rva << std::endl;
 	return NULL;
 }
@@ -42,7 +42,7 @@ bool CheckModules(const char* const target)
 {
 	for (UINT x = 0; x < modules.size(); ++x)
 	{
-		if (ImageCmp(modules[x].image.name, target)) return true;
+		if (ImageCmp(modules[x].image.path, target)) return true;
 	}
 
 	for (UINT x = 0; x < LoadedModules.size(); ++x)

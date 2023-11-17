@@ -5,7 +5,7 @@
 
 struct IMAGE_DATA
 {
-	char* name;
+	char* path;
 	const char* MappedAddress;
 	const IMAGE_NT_HEADERS32* NT_HEADERS;
 	const IMAGE_SECTION_HEADER* sections;
@@ -19,9 +19,9 @@ struct MODULE
 
 struct LOADED_MODULE
 {
-	DWORD base = 0;
-	char* name;
-	HMODULE handle;
+	DWORD base = NULL;
+	char* name = nullptr; 
+	HMODULE handle = nullptr;
 };
 
 

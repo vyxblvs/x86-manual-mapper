@@ -114,7 +114,7 @@ int main(const int argc, char* argv[])
                 for (UINT x = 0; x < modules.size(); ++x)
                 {
                     if (IS_API_SET(modules[x].image)) continue;
-                    threads[x] = __CreateThread(DispatchThread, &modules[x]);
+                    threads[x] = CreateThreadEx(DispatchThread, &modules[x]);
                 }
                 for (UINT x = 0; x < modules.size() && status != NULL; ++x)
                 {
@@ -128,7 +128,7 @@ int main(const int argc, char* argv[])
                     __pragma(warning(pop));
                 }
 
-                __CreateThread(UnloadModules, nullptr);
+                CreateThreadEx(UnloadModules, nullptr);
                 delete[] threads;
                 threads = nullptr;
 
@@ -143,7 +143,7 @@ int main(const int argc, char* argv[])
                         if (x > 0)
                         {
                             delete[] modules[x].image.MappedAddress;
-                            delete[] modules[x].image.name;
+                            delete[] modules[x].image.path;
                         }
                     }
                     if (modules.size() > 1) modules.erase(modules.begin() + 1, modules.end());

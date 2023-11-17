@@ -77,7 +77,6 @@ bool GetLoadedModules()
 		path[length] = '\0';
 		LoadedModules.emplace_back(LOADED_MODULE{ reinterpret_cast<DWORD>(handles[x]) });
 		LoadedModules.back().name = new char[length + 1];
-
 		strcpy_s(LoadedModules.back().name, length + 1, path);
 	}
 
@@ -94,7 +93,7 @@ bool MapDll(const MODULE* const target)
 	if (!wpm(target->ImageBase, image->MappedAddress, sections[0].PointerToRawData))
 	{
 		std::cerr << "Failed to map PE headers into memory (" << GetLastError() << ")\n";
-		std::cerr << "Image: " << image->name << '\n';
+		std::cerr << "Image: " << image->path << '\n';
 		return false;
 	}
 
@@ -110,7 +109,7 @@ bool MapDll(const MODULE* const target)
 		{
 			std::cerr << "Failed to map section into memory (" << GetLastError() << ")\n";
 			std::cerr << "Section: " << sections[x].Name << '\n';
-			std::cerr << "Image: " << image->name << '\n';
+			std::cerr << "Image: " << image->path << '\n';
 			return false;
 		}
 		else VirtualProtectEx(process, address, sections[x].SizeOfRawData, sections[x].Characteristics / 0x1000000, &old);

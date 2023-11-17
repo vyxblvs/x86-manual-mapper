@@ -13,4 +13,4 @@ bool HijackThread();
 
 //Macros
 
-#define __CreateThread(address, param) CreateThread(nullptr, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(address), param, NULL, nullptr) 
+#define CreateThreadEx(address, param) CreateThread(nullptr, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(address), param, NULL, nullptr) 

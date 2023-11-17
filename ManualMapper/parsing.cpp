@@ -27,8 +27,8 @@ bool GetDll(const char* const path, MODULE* const buffer)
 
 	IMAGE_DATA& const image = buffer->image;
 
-	image.name = new char[MAX_PATH];
-	strcpy_s(image.name, MAX_PATH, path);
+	image.path = new char[MAX_PATH];
+	strcpy_s(image.path, MAX_PATH, path);
 
 	image.MappedAddress = image_ptr;
 	image.NT_HEADERS = reinterpret_cast<IMAGE_NT_HEADERS32*>(image_ptr + *reinterpret_cast<DWORD*>(image_ptr + 0x3C));
@@ -61,7 +61,7 @@ bool FindModuleDir(const char* const target, std::string dir)
 
 	do
 	{
-		if (CheckAttribs(data)) continue;
+		if (data.dwFileAttributes >= 256) continue;
 
 		char path[MAX_PATH];
 		strcpy_s(path, MAX_PATH, (dir + data.cFileName).c_str());
@@ -187,7 +187,7 @@ bool GetUnloadedExport(const char* const ModuleName, const char* const ImportNam
 	const MODULE* ModulePtr = nullptr;
 	for (UINT x = 0; x < modules.size(); ++x)
 	{
-		if (ImageCmp(modules[x].image.name, ModuleName))
+		if (ImageCmp(modules[x].image.path, ModuleName))
 		{
 			ModulePtr = &modules[x];
 			break;
