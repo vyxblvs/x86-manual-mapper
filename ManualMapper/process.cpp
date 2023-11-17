@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "process.h"
-#include "helpers.h"
 
 
 bool GetProcessHandle(const char* const name)
@@ -75,9 +74,13 @@ bool GetLoadedModules()
 		}
 
 		path[length] = '\0';
-		LoadedModules.emplace_back(LOADED_MODULE{ reinterpret_cast<DWORD>(handles[x]) });
-		LoadedModules.back().name = new char[length + 1];
-		strcpy_s(LoadedModules.back().name, length + 1, path);
+		MODULE ModuleStruct{ reinterpret_cast<DWORD>(handles[x]) };
+		ModuleStruct.image.handle = GetModuleHandleA(path);
+		
+		ModuleStruct.image.path = new char[length + 1];
+		strcpy_s(ModuleStruct.image.path, length + 1, path);
+
+		LoadedModules.emplace_back(ModuleStruct);
 	}
 
 	return true;
@@ -90,7 +93,7 @@ bool MapDll(const MODULE* const target)
 	const IMAGE_SECTION_HEADER* const sections = image->sections;
 
 	//Mapping headers
-	if (!wpm(target->ImageBase, image->MappedAddress, sections[0].PointerToRawData))
+	if (!wpm(target->ImageBase, image->LocalBase, sections[0].PointerToRawData))
 	{
 		std::cerr << "Failed to map PE headers into memory (" << GetLastError() << ")\n";
 		std::cerr << "Image: " << image->path << '\n';
@@ -104,7 +107,7 @@ bool MapDll(const MODULE* const target)
 	for (UINT x = 0; x < image->NT_HEADERS->FileHeader.NumberOfSections; ++x)
 	{
 		void* const address = reinterpret_cast<void*>(target->ImageBase + sections[x].VirtualAddress);
-		const void* const section = image->MappedAddress + sections[x].PointerToRawData;
+		const void* const section = image->LocalBase + sections[x].PointerToRawData;
 		if (!wpm(address, section, sections[x].SizeOfRawData))
 		{
 			std::cerr << "Failed to map section into memory (" << GetLastError() << ")\n";
@@ -112,7 +115,7 @@ bool MapDll(const MODULE* const target)
 			std::cerr << "Image: " << image->path << '\n';
 			return false;
 		}
-		else VirtualProtectEx(process, address, sections[x].SizeOfRawData, sections[x].Characteristics / 0x1000000, &old);
+		VirtualProtectEx(process, address, sections[x].SizeOfRawData, sections[x].Characteristics / 0x1000000, &old);
 	}
 
 	return true;

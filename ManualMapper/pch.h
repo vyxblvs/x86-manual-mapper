@@ -1,5 +1,6 @@
 #pragma once
 #define WIN32_LEAN_AND_MEAN
+#define HexOut "0x" << std::uppercase << std::hex
 
 #include <windows.h>
 #include <TlHelp32.h>

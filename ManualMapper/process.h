@@ -13,4 +13,4 @@ bool HijackThread();
 
 //Macros
 
-#define CreateThreadEx(address, param) CreateThread(nullptr, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(address), param, NULL, nullptr) 
+#define wpm(address, buffer, size) WriteProcessMemory(process, reinterpret_cast<void*>(address), buffer, size, nullptr)

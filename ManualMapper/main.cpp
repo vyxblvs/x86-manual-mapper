@@ -1,34 +1,13 @@
 #include "pch.h"
 #include "process.h"
 #include "parsing.h"
-#include "helpers.h"
 
 HANDLE process;
-std::vector<MODULE> modules;
-std::vector<LOADED_MODULE> LoadedModules;
-
-
-bool WINAPI DispatchThread(MODULE* target)
-{
-    if (SHOULD_RELOCATE(target)) ApplyReloction(target);
-    return ResolveImports(&target->image);
-}
-
-
-void WINAPI UnloadModules()
-{
-    for (UINT x = 0; x < LoadedModules.size(); ++x)
-    {
-        if (LoadedModules[x].handle) FreeLibrary(LoadedModules[x].handle);
-        delete[] LoadedModules[x].name;
-    }
-    LoadedModules.clear();
-}
-
+std::vector<MODULE> modules, LoadedModules;
 
 int main(const int argc, char* argv[])
 {
-    int status = -1;
+    int status = 1;
 
     //Allocate memory for target data manually if arguments weren't passed
     switch (argc)
@@ -110,42 +89,31 @@ int main(const int argc, char* argv[])
             if (status)
             {
                 //Applying relocation & import resolution
-                HANDLE* threads = new HANDLE[modules.size()];
                 for (UINT x = 0; x < modules.size(); ++x)
                 {
                     if (IS_API_SET(modules[x].image)) continue;
-                    threads[x] = CreateThreadEx(DispatchThread, &modules[x]);
+                    if (SHOULD_RELOCATE(modules[x])) ApplyReloction(&modules[x]);
+                    if (!ResolveImports(&modules[x].image));
                 }
-                for (UINT x = 0; x < modules.size() && status != NULL; ++x)
+                for (UINT x = 0; x < LoadedModules.size(); ++x)
                 {
-                    WaitForSingleObject(threads[x], INFINITE);
-                    GetExitCodeThread(threads[x], reinterpret_cast<DWORD*>(&status));
+                    delete[] LoadedModules[x].image.path;
+                    if (LoadedModules[x].image.NT_HEADERS) delete[] LoadedModules[x].image.LocalBase;
                 }
-                for (UINT x = 0; x < modules.size(); ++x)
-                {
-                    __pragma(warning(push)) __pragma(warning(disable:6385 6001));
-                    CloseHandle(threads[x]);
-                    __pragma(warning(pop));
-                }
-
-                CreateThreadEx(UnloadModules, nullptr);
-                delete[] threads;
-                threads = nullptr;
+                LoadedModules.clear();
 
                 if (status)
                 {
                     //Mapping modules into memory
-                    for (UINT x = 0; x < modules.size(); ++x)
+                    for (UINT x = 0; status && x < modules.size(); ++x)
                     {
                         if (IS_API_SET(modules[x].image)) continue;
                         status = MapDll(&modules[x]);
-                        if (!status) break;
-                        if (x > 0)
-                        {
-                            delete[] modules[x].image.path;
-                            delete[] modules[x].image.MappedAddress;
-                            memset(&modules[x].image, NULL, sizeof(IMAGE_DATA));
-                        }
+                    }
+                    for (UINT x = 1; x < modules.size(); ++x)
+                    {
+                        delete[] modules[x].image.path;
+                        delete[] modules[x].image.LocalBase;
                     }
                     if (modules.size() > 1) modules.erase(modules.begin() + 1, modules.end());
 

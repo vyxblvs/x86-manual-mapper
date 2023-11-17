@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "parsing.h"
-#include "helpers.h"
 
 
 bool GetDll(const char* const path, MODULE* const buffer)
@@ -26,11 +25,13 @@ bool GetDll(const char* const path, MODULE* const buffer)
 	file.close();
 
 	IMAGE_DATA& const image = buffer->image;
+	if (!image.path)
+	{
+		image.path = new char[MAX_PATH];
+		strcpy_s(image.path, MAX_PATH, path);
+	}
 
-	image.path = new char[MAX_PATH];
-	strcpy_s(image.path, MAX_PATH, path);
-
-	image.MappedAddress = image_ptr;
+	image.LocalBase = image_ptr;
 	image.NT_HEADERS = reinterpret_cast<IMAGE_NT_HEADERS32*>(image_ptr + *reinterpret_cast<DWORD*>(image_ptr + 0x3C));
 	image.sections = IMAGE_FIRST_SECTION(image.NT_HEADERS);
 
@@ -78,7 +79,7 @@ bool FindModuleDir(const char* const target, std::string dir)
 		else if (_stricmp(target, data.cFileName) == 0)
 		{
 			FindClose(search);
-			modules.emplace_back(MODULE{ NULL });
+			modules.emplace_back(MODULE{});
 			return GetDll(path, &modules.back());
 		}
 
@@ -87,6 +88,45 @@ bool FindModuleDir(const char* const target, std::string dir)
 	SetLastError(0);
 	FindClose(search);
 	return false;
+}
+
+
+template <typename ret> auto ConvertRva(const void* const base, const DWORD rva, const IMAGE_DATA* const image) -> ret
+{
+	const IMAGE_SECTION_HEADER* SectionHeader = image->sections;
+
+	for (UINT x = 0; x < image->NT_HEADERS->FileHeader.NumberOfSections; ++x)
+	{
+		if (rva >= SectionHeader[x].VirtualAddress && rva <= (SectionHeader[x].VirtualAddress + SectionHeader[x].Misc.VirtualSize))
+		{
+			return reinterpret_cast<ret>(reinterpret_cast<DWORD>(base) + SectionHeader[x].PointerToRawData + (rva - SectionHeader[x].VirtualAddress));
+		}
+	}
+
+	std::cerr << "Failed to find file offset\n";
+	std::cerr << "Module: " << image->path << '\n';
+	std::cerr << "RVA: " << HexOut << rva << '\n';
+	return reinterpret_cast<ret>(NULL);
+}
+
+
+MODULE* FindModule(const char* const name)
+{
+	std::string path;
+
+	for (UINT x = 0; x < LoadedModules.size(); ++x)
+	{
+		path = LoadedModules[x].image.path;
+		if (_stricmp((path.substr(path.find_last_of('\\') + 1)).c_str(), name) == 0) return &LoadedModules[x];
+	}
+
+	for (UINT x = 0; x < modules.size(); ++x)
+	{
+		path = modules[x].image.path;
+		if (_stricmp((path.substr(path.find_last_of('\\') + 1)).c_str(), name) == 0) return &modules[x];
+	}
+
+	return nullptr;
 }
 
 
@@ -108,13 +148,13 @@ bool GetDependencies(const IMAGE_DATA* const image)
 	const IMAGE_DATA_DIRECTORY ImportTableData = DataDirectory(image, IMAGE_DIRECTORY_ENTRY_IMPORT); 
 	if (!ImportTableData.Size) return true;
 
-	const char* const MappedAddress = image->MappedAddress;
+	const char* const MappedAddress = image->LocalBase;
 	const auto ImportDirectory = ConvertRva<const IMAGE_IMPORT_DESCRIPTOR*>(MappedAddress, ImportTableData.VirtualAddress, image);
 
 	for (UINT x = 0; x < (ImportTableData.Size / sizeof(IMAGE_IMPORT_DESCRIPTOR)) - 1; ++x)
 	{
 		const char* const ModuleName = ConvertRva<const char*>(MappedAddress, ImportDirectory[x].Name, image);
-		if (CheckModules(ModuleName)) continue;
+		if (FindModule(ModuleName)) continue;
 
 		for (UINT y = 0, num_of_paths = sizeof(directories) / MAX_PATH; y < num_of_paths; ++y)
 		{
@@ -135,7 +175,7 @@ void ApplyReloction(const MODULE* TargetModule)
 	const auto image   = &TargetModule->image;
 	const auto DataDir = DataDirectory(image, IMAGE_DIRECTORY_ENTRY_BASERELOC);
 
-	auto RelocBlock = ConvertRva<IMAGE_BASE_RELOCATION*>(image->MappedAddress, DataDir.VirtualAddress, image);
+	auto RelocBlock = ConvertRva<IMAGE_BASE_RELOCATION*>(image->LocalBase, DataDir.VirtualAddress, image);
 	const BYTE* const FinalEntry = reinterpret_cast<BYTE*>(RelocBlock) + DataDir.Size;
 
 	while (reinterpret_cast<BYTE*>(RelocBlock) < FinalEntry)
@@ -144,7 +184,7 @@ void ApplyReloction(const MODULE* TargetModule)
 
 		for (UINT y = 0; entry[y] != IMAGE_REL_BASED_ABSOLUTE && y < (RelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD); ++y)
 		{
-			DWORD* const RelocAddress = ConvertRva<DWORD*>(image->MappedAddress, entry[y] % 0x1000 + RelocBlock->VirtualAddress, image);
+			DWORD* const RelocAddress = ConvertRva<DWORD*>(image->LocalBase, entry[y] % 0x1000 + RelocBlock->VirtualAddress, image);
 			*RelocAddress = (*RelocAddress - image->NT_HEADERS->OptionalHeader.ImageBase) + TargetModule->ImageBase;
 		}
 
@@ -153,123 +193,97 @@ void ApplyReloction(const MODULE* TargetModule)
 }
 
 
-bool GetLoadedExport(LOADED_MODULE* const ModulePtr, const char* const ExportName, DWORD* const buffer)
+bool GetLoadedFunction(MODULE* ModulePtr, const char* const FunctionName, DWORD* const buffer)
 {
-	if (!ModulePtr->handle)
+	const DWORD address = reinterpret_cast<DWORD>(GetProcAddress(ModulePtr->image.handle, FunctionName));
+	if (!address)
 	{
-		ModulePtr->handle = LoadLibraryA(ModulePtr->name);
-		if (!ModulePtr->handle)
-		{
-			std::cerr << "[GetLoadedExport] Failed to load module (" << GetLastError() << ")\n";
-			std::cerr << "Path: " << ModulePtr->name << '\n';
-			return false;
-		}
-	}
-
-	const DWORD ProcAddress = reinterpret_cast<DWORD>(GetProcAddress(ModulePtr->handle, ExportName));
-	if (!ProcAddress)
-	{
-		std::cerr << "[GetLoadedExport] Failed to locate function (" << GetLastError() << ")\n";
-		std::cerr << "Function name: " << ExportName << '\n';
-		std::cerr << "Module: " << ModulePtr->name << '\n';
+		std::cout << "Failed to locate function: " << FunctionName << '\n';
 		return false;
 	}
 
-	*buffer = ModulePtr->base + (ProcAddress - reinterpret_cast<DWORD>(ModulePtr->handle));
-	
+	*buffer = ModulePtr->ImageBase + (address - reinterpret_cast<DWORD>(ModulePtr->image.handle));
 	return true;
 }
 
 
-bool GetUnloadedExport(const char* const ModuleName, const char* const ImportName, DWORD* const buffer)
+bool GetExport(const MODULE* const ModulePtr, const char* const ModuleName, const char* const ImportName, DWORD* const buffer)
 {
-	//Locating the imported module
-	const MODULE* ModulePtr = nullptr;
-	for (UINT x = 0; x < modules.size(); ++x)
-	{
-		if (ImageCmp(modules[x].image.path, ModuleName))
-		{
-			ModulePtr = &modules[x];
-			break;
-		}
-	}
-	if (!ModulePtr)
-	{
-		std::cerr << "[GetUnloadedExport] Failed to locate module: " << ModuleName << '\n';
-		std::cerr << "Vector size: " << modules.size() << '\n';
-		return false;
-	}
-
-	//Getting basic export data
 	const auto image         = &ModulePtr->image;
-	const auto MappedAddress = image->MappedAddress;
+	const auto MappedAddress = image->LocalBase;
 	const auto ExportDirData = DataDirectory(image, IMAGE_DIRECTORY_ENTRY_EXPORT);
 	const auto ExportDir     = ConvertRva<IMAGE_EXPORT_DIRECTORY*>(MappedAddress, ExportDirData.VirtualAddress, image);
 	const auto ExportTable   = ConvertRva<DWORD*>(MappedAddress, ExportDir->AddressOfFunctions,    image);
 	const auto NamePtrTable  = ConvertRva<DWORD*>(MappedAddress, ExportDir->AddressOfNames,        image);
 	const auto OrdinalTable  = ConvertRva<WORD*> (MappedAddress, ExportDir->AddressOfNameOrdinals, image);
 
-	//Parsing the export directory for a function match
 	for(UINT x = 0; x < ExportDir->NumberOfFunctions; ++x)
 	{
 		const auto ExportName = ConvertRva<const char*>(MappedAddress, NamePtrTable[x], image);
 		if (_stricmp(ImportName, ExportName) == 0)
 		{
-			//Getting the Export Address Table index for the matched function
 			const WORD index = OrdinalTable[x];
 			
-			//Handling forwarders
+			//Handling Forwarders (this should probably just be removed)
 			if ((ExportTable[index] >= ExportDirData.VirtualAddress) && (ExportTable[index] < ExportDirData.VirtualAddress + ExportDirData.Size))
 			{
-				const std::string forwarder = ConvertRva<const char*>(MappedAddress, ExportTable[index], image);
-				LOADED_MODULE* const ModulePtr = GetLoadedModule((forwarder.substr(0, forwarder.find_last_of('.') + 1) + "dll").c_str());
-				if (!ModulePtr)
+				std::string forwarder = ConvertRva<const char*>(MappedAddress, ExportTable[index], image);
+				forwarder = forwarder.substr(0, forwarder.find_last_of('.') + 1) + "dll";
+
+				MODULE* const ForwardedModule = FindModule(forwarder.c_str());
+				if (!ForwardedModule)
 				{
-					std::cout << "Failed to locate module imported via forwarding: " << ModuleName << '\n';
+					std::cout << "Failed to locate module imported via forwarding: " << ModulePtr->image.path << '\n';
 					return false;
 				}
-				return GetLoadedExport(ModulePtr, ExportName, buffer);
+
+				if (!ForwardedModule->image.NT_HEADERS && ForwardedModule->image.handle)
+				{
+					return GetLoadedFunction(ForwardedModule, ImportName, buffer);
+				}
+
+				return GetExport(ForwardedModule, forwarder.c_str(), ImportName, buffer);
 			}
-			else *buffer = ModulePtr->ImageBase + ExportTable[index];
+
+			const MODULE* const ImportedModule = FindModule(ModuleName);
+			if (!ImportedModule) return false;
+			*buffer = ImportedModule->ImageBase + ExportTable[index];
 
 			return true;
 		}
 	}
 
 	std::cerr << "No export found for: " << ImportName << '\n';
-	std::cerr << "Module: " << ModuleName << '\n';
+	std::cerr << "Module: " << ModulePtr->image.path << '\n';
 	return false;
 }
 
 
 bool ResolveImports(const IMAGE_DATA* const image)
 {
-	//Getting basic import data
-	const char* const MappedAddress = image->MappedAddress;
+	const char* const MappedAddress = image->LocalBase;
 	const auto ImportDir = ConvertRva<const IMAGE_IMPORT_DESCRIPTOR*>(MappedAddress, DataDirectory(image, IMAGE_DIRECTORY_ENTRY_IMPORT).VirtualAddress, image);
 	
-	//Parsing IDT (final entry is NULL)
 	for (UINT x = 0; ImportDir[x].Name != NULL; ++x)
 	{
 		const auto ImportTable = ConvertRva<IMAGE_THUNK_DATA32*>(MappedAddress, ImportDir[x].FirstThunk, image);
 		const auto LookupTable = ConvertRva<const IMAGE_THUNK_DATA32*>(MappedAddress, ImportDir[x].Characteristics, image);
 		const auto ModuleName  = ConvertRva<const char*> (MappedAddress, ImportDir[x].Name, image);
 
-		//Checking if the indexed module is already loaded within the target process
-		LOADED_MODULE* const ModuleIndex = GetLoadedModule(ModuleName); 
-
-		//Going through each function imported from the indexed module (ILT ends with NULL entry)
-		for (UINT y = 0; LookupTable[y].u1.Function != NULL; ++y)
+		MODULE* const ModulePtr = FindModule(ModuleName);
+		if (!ModulePtr->image.NT_HEADERS && !ModulePtr->image.handle && !GetDll(ModulePtr->image.path, ModulePtr)) return false;
+		
+		for (UINT y = 0; LookupTable[y].u1.Function; ++y)
 		{
 			const char* const ImportName = ConvertRva<IMAGE_IMPORT_BY_NAME*>(MappedAddress, LookupTable[y].u1.AddressOfData, image)->Name;
 
-			if (ModuleIndex)
+			if (!ModulePtr->image.NT_HEADERS && ModulePtr->image.handle)
 			{
-				if (!GetLoadedExport(ModuleIndex, ImportName, &ImportTable[y].u1.AddressOfData)) return false;
+				if (!GetLoadedFunction(ModulePtr, ImportName, &ImportTable[y].u1.AddressOfData)) return false;
 			}
 			else
 			{
-				if (!GetUnloadedExport(ModuleName, ImportName, &ImportTable[y].u1.AddressOfData)) return false;
+				if (!GetExport(ModulePtr, ModuleName, ImportName, &ImportTable[y].u1.AddressOfData)) return false;
 			}
 		}
 	}
