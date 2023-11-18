@@ -48,6 +48,45 @@ bool GetDll(const char* const path, MODULE* const buffer)
 }
 
 
+template <typename ret> auto ConvertRva(const void* const base, const DWORD rva, const IMAGE_DATA* const image) -> ret
+{
+	const IMAGE_SECTION_HEADER* SectionHeader = image->sections;
+
+	for (UINT x = 0; x < image->NT_HEADERS->FileHeader.NumberOfSections; ++x)
+	{
+		if (rva >= SectionHeader[x].VirtualAddress && rva <= (SectionHeader[x].VirtualAddress + SectionHeader[x].Misc.VirtualSize))
+		{
+			return reinterpret_cast<ret>(reinterpret_cast<DWORD>(base) + SectionHeader[x].PointerToRawData + (rva - SectionHeader[x].VirtualAddress));
+		}
+	}
+
+	std::cerr << "Failed to find file offset\n";
+	std::cerr << "Module: " << image->path << '\n';
+	std::cerr << "RVA: " << HexOut << rva << '\n';
+	return reinterpret_cast<ret>(NULL);
+}
+
+
+MODULE* FindModule(const char* const name)
+{
+	std::string path;
+
+	for (UINT x = 0; x < LoadedModules.size(); ++x)
+	{
+		path = LoadedModules[x].image.path;
+		if (_stricmp((path.substr(path.find_last_of('\\') + 1)).c_str(), name) == 0) return &LoadedModules[x];
+	}
+
+	for (UINT x = 0; x < modules.size(); ++x)
+	{
+		path = modules[x].image.path;
+		if (_stricmp((path.substr(path.find_last_of('\\') + 1)).c_str(), name) == 0) return &modules[x];
+	}
+
+	return nullptr;
+}
+
+
 bool FindModuleDir(const char* const target, std::string dir)
 {
 	dir += '\\';
@@ -88,45 +127,6 @@ bool FindModuleDir(const char* const target, std::string dir)
 	SetLastError(0);
 	FindClose(search);
 	return false;
-}
-
-
-template <typename ret> auto ConvertRva(const void* const base, const DWORD rva, const IMAGE_DATA* const image) -> ret
-{
-	const IMAGE_SECTION_HEADER* SectionHeader = image->sections;
-
-	for (UINT x = 0; x < image->NT_HEADERS->FileHeader.NumberOfSections; ++x)
-	{
-		if (rva >= SectionHeader[x].VirtualAddress && rva <= (SectionHeader[x].VirtualAddress + SectionHeader[x].Misc.VirtualSize))
-		{
-			return reinterpret_cast<ret>(reinterpret_cast<DWORD>(base) + SectionHeader[x].PointerToRawData + (rva - SectionHeader[x].VirtualAddress));
-		}
-	}
-
-	std::cerr << "Failed to find file offset\n";
-	std::cerr << "Module: " << image->path << '\n';
-	std::cerr << "RVA: " << HexOut << rva << '\n';
-	return reinterpret_cast<ret>(NULL);
-}
-
-
-MODULE* FindModule(const char* const name)
-{
-	std::string path;
-
-	for (UINT x = 0; x < LoadedModules.size(); ++x)
-	{
-		path = LoadedModules[x].image.path;
-		if (_stricmp((path.substr(path.find_last_of('\\') + 1)).c_str(), name) == 0) return &LoadedModules[x];
-	}
-
-	for (UINT x = 0; x < modules.size(); ++x)
-	{
-		path = modules[x].image.path;
-		if (_stricmp((path.substr(path.find_last_of('\\') + 1)).c_str(), name) == 0) return &modules[x];
-	}
-
-	return nullptr;
 }
 
 
