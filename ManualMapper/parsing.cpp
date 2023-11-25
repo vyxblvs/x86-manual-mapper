@@ -37,7 +37,7 @@ bool GetDll(const char* const path, MODULE* const buffer)
 
 	if (image.NT_HEADERS->OptionalHeader.Magic != 0x10B)
 	{
-		std::cerr << "Invalid DLL architecture, image must be PE32\n";
+		std::cerr << "Invalid architecture, image must be x86 (PE32)\n";
 		std::cerr << "Magic number: " << HexOut << image.NT_HEADERS->OptionalHeader.Magic << '\n';
 		std::cerr << "Path: " << path << '\n';
 		delete[] image_ptr;
@@ -48,7 +48,7 @@ bool GetDll(const char* const path, MODULE* const buffer)
 }
 
 
-template <typename ret> auto ConvertRva(const void* const base, const DWORD rva, const IMAGE_DATA* const image) -> ret
+template <typename ret> auto ConvertRva(const void* const base, const DWORD rva, const IMAGE_DATA* const image)->ret
 {
 	const IMAGE_SECTION_HEADER* SectionHeader = image->sections;
 
@@ -237,12 +237,7 @@ bool GetExport(const MODULE* const ModulePtr, const char* const ModuleName, cons
 					return false;
 				}
 
-				if (!ForwardedModule->image.NT_HEADERS && ForwardedModule->image.handle)
-				{
-					return GetLoadedFunction(ForwardedModule, ImportName, buffer);
-				}
-
-				return GetExport(ForwardedModule, forwarder.c_str(), ImportName, buffer);
+				return GetLoadedFunction(ForwardedModule, ImportName, buffer);
 			}
 
 			const MODULE* const ImportedModule = FindModule(ModuleName);

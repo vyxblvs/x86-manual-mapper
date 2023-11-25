@@ -3,11 +3,11 @@
 
 //Forward Declarations
 
-bool GetProcessHandle(const char* name);
+bool GetProcessHandle(const char* const name);
 
 bool GetLoadedModules();
 
-bool MapDll(const MODULE* target);
+bool MapDll(const MODULE* const target);
 
 bool HijackThread();
 
