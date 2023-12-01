@@ -14,6 +14,7 @@ bool GetDll(const char* const path, MODULE* const buffer)
 	if (file.fail())
 	{
 		std::cerr << "Failed to open file: " << path << '\n';
+		file.close();
 		return false;
 	}
 
@@ -38,7 +39,6 @@ bool GetDll(const char* const path, MODULE* const buffer)
 	if (image.NT_HEADERS->OptionalHeader.Magic != 0x10B)
 	{
 		std::cerr << "Invalid architecture, image must be x86 (PE32)\n";
-		std::cerr << "Magic number: " << HexOut << image.NT_HEADERS->OptionalHeader.Magic << '\n';
 		std::cerr << "Path: " << path << '\n';
 		delete[] image_ptr;
 		return false;
@@ -160,7 +160,7 @@ bool GetDependencies(const IMAGE_DATA* const image)
 		{
 			if (!FindModuleDir(ModuleName, directories[y]) && y == num_of_paths)
 			{
-				std::cerr << "[GetDependencies] Failed to locate module: " << ModuleName << '\n';
+				std::cerr << "Failed to locate module: " << ModuleName << '\n';
 				return false;
 			}
 		}

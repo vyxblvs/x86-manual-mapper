@@ -23,30 +23,22 @@ bool GetProcessHandle(const char* const name)
 		{
 			if (_wcsicmp(wName, pe32.szExeFile) == 0)
 			{
-				process = OpenProcess(PROCESS_VM_READ | PROCESS_VM_OPERATION | PROCESS_VM_WRITE, false, pe32.th32ProcessID);
+				process = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE, false, pe32.th32ProcessID);
 				if (!process)
 				{
 					std::cerr << "Failed to open process (" << GetLastError() << ")\n";
-					std::cerr << "PID: " << pe32.th32ProcessID << '\n';
-					goto exit;
+					break;
 				}
 
 				BOOL is_x86;
 				IsWow64Process(process, &is_x86);
-				if (!is_x86)
-				{
-					std::cerr << "Invalid target architecture, process must be running under WOW64\n";
-					std::wcerr << L"Located process: " << pe32.szExeFile << L'\n';
-					process = reinterpret_cast<void*>(CloseHandle(process) * 0);
-				}
-
-				goto exit;
+				if (!is_x86) std::cerr << "Invalid target architecture, process must be running under WOW64\n";
+				
+				break;
 			}
 		} while (Process32Next(snapshot, &pe32));
 	}
-	std::cerr << "Failed to locate process: " << name << '\n';
 
-exit:
 	CloseHandle(snapshot);
 	return process != 0;
 }
@@ -96,7 +88,7 @@ bool MapDll(const MODULE* const target)
 	if (!wpm(target->ImageBase, image->LocalBase, sections[0].PointerToRawData))
 	{
 		std::cerr << "Failed to map PE headers into memory (" << GetLastError() << ")\n";
-		std::cerr << "Image: " << image->path << '\n';
+		std::cerr << "Image path: " << image->path << '\n';
 		return false;
 	}
 
@@ -111,8 +103,7 @@ bool MapDll(const MODULE* const target)
 		if (!wpm(address, section, sections[x].SizeOfRawData))
 		{
 			std::cerr << "Failed to map section into memory (" << GetLastError() << ")\n";
-			std::cerr << "Section: " << sections[x].Name << '\n';
-			std::cerr << "Image: " << image->path << '\n';
+			std::cerr << "Image path: " << image->path << '\n';
 			return false;
 		}
 		VirtualProtectEx(process, address, sections[x].SizeOfRawData, sections[x].Characteristics / 0x1000000, &old);
@@ -132,7 +123,7 @@ bool HijackThread()
 	const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, NULL);
 	if (snapshot == INVALID_HANDLE_VALUE)
 	{
-		std::cerr << "Failed to take a snapshot of threads\n";
+		std::cerr << "Failed to take a snapshot of threads (" << GetLastError() << ")\n";
 		return false;
 	}
 
@@ -166,7 +157,6 @@ bool HijackThread()
 	if (Wow64SuspendThread(thread) == static_cast<DWORD>(-1))
 	{
 		std::cerr << "Failed to suspend thread (" << GetLastError() << ")\n";
-		std::cerr << "Thread ID: " << te32.th32ThreadID << '\n';
 		CloseHandle(thread);
 		return false;
 	}

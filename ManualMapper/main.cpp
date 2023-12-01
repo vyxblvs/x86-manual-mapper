@@ -5,24 +5,21 @@
 HANDLE process;
 std::vector<MODULE> modules, LoadedModules;
 
-int main(const int argc, char* argv[])
+int main(int argc, char* argv[])
 {
     int status = 1;
+    char ProcessName[MAX_PATH], FileName[MAX_PATH];
 
-    //Allocate memory for target data manually if arguments weren't passed
-    switch (argc)
+    if (argc >= 3)
     {
-    case 1:
-        argv[1] = new char[MAX_PATH];
-        [[fallthrough]];
-
-    case 2:
-        argv[2] = new char[MAX_PATH];
+        strcpy_s(ProcessName, MAX_PATH, argv[1]);
+        strcpy_s(FileName, MAX_PATH, argv[2]);
     }
 
     //Loading or saving target data
     if (argc == 1 || argc == 4)
     {
+        //If the executable path isnt prefixed to cfg.txt, the command directory will be used by fstream unless cd'd to injector dir
         std::string buffer(MAX_PATH, NULL);
         GetModuleFileNameA(nullptr, buffer.data(), MAX_PATH);
 
@@ -35,13 +32,13 @@ int main(const int argc, char* argv[])
 
         if (argc == 1)
         {
-            file.getline(argv[1], MAX_PATH);
-            file.getline(argv[2], MAX_PATH);
+            file.getline(ProcessName, MAX_PATH);
+            file.getline(FileName, MAX_PATH);
         }
         else if (_stricmp(argv[3], "-save") == 0)
         {
-            file << argv[1] << '\n';
-            file << argv[2] << '\n';
+            file << ProcessName << '\n';
+            file << FileName << '\n';
         }
 
         file.close();
@@ -49,21 +46,9 @@ int main(const int argc, char* argv[])
 
     //Load user specified DLL
     modules.emplace_back(MODULE{ NULL });
-    if (!GetDll(argv[2], &modules.back())) return false;
+    if (!GetDll(FileName, &modules.back())) return false;
 
-    status = GetProcessHandle(argv[1]);
-    switch (argc)
-    {
-    case 1:
-        delete[] argv[2];
-        argv[2] = nullptr;
-        [[fallthrough]];
-    
-    case 2:
-        delete[] argv[1];
-        argv[1] = nullptr;
-    }
-
+    status = GetProcessHandle(ProcessName);
     if (status)
     {
         if (GetLoadedModules()) // Populating LoadedModules with every module already present in the target process
